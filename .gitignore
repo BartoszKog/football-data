@@ -8,3 +8,41 @@ wheels/
 
 # Virtual environments
 .venv
+
+# ignore external repositories
+OddsHarvester/
+
+
+# Python basics
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# Data (Never commit data!)
+data/raw/*
+data/processed/*
+data/external/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/external/.gitkeep
+*.csv
+*.json
+*.parquet
+*.pkl
+
+# Marimo / Notebooks
+__marimo__/
+.ipynb_checkpoints/
+
+# Sandbox & Logs
+sandbox/
+*.log
+logi_skrapowania.txt
+
+# OS specifics
+.DS_Store
+
+
+# VSCode settings
+.vscode/
