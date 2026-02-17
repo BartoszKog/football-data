@@ -39,6 +39,7 @@ __marimo__/
 sandbox/
 *.log
 logi_skrapowania.txt
+logs/
 
 # OS specifics
 .DS_Store

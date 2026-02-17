@@ -1,3 +1,5 @@
+# Football Data
+
 ## 📂 Organizacja Projektu
 
     football-data/
@@ -26,3 +28,4 @@
     │   └── visualization/    <- Funkcje pomocnicze do tworzenia wykresów.
     │
     └── OddsHarvester/        <- Zewnętrzne narzędzie do scrapowania (sub-repozytorium).
+    
