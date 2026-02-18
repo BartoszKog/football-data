@@ -49,3 +49,43 @@ wersja compact (usuwa surowe kolumny marketow po wyliczeniu kursow):
 
     from src.data import load_and_add_odds_columns_compact
     df = load_and_add_odds_columns_compact(pattern="data/raw/1liga_*.json", trim_drop=1)
+
+## Feature engineering (src/features)
+
+Przykład tworzenia domniemanych prawdopodobienstw z kursow metoda potegowa:
+
+    from src.features import add_power_implied_probabilities
+
+    df = add_power_implied_probabilities(
+        df,
+        odds_columns=["max_1", "max_X", "max_2"],
+        output_columns=["prob_1", "prob_X", "prob_2"],
+        min_odds=1.01,
+        initial_k=1.0,
+        max_iter=100,
+        tolerance=1e-8,
+        errors="coerce",
+    )
+
+Działa tez dla rynkow 2-way (np. BTTS):
+
+    df = add_power_implied_probabilities(
+        df,
+        odds_columns=["max_btts_yes", "max_btts_no"],
+        output_columns=["prob_btts_yes", "prob_btts_no"],
+    )
+
+Wersja wygodna dla standardowych rynkow (`1x2`, `btts`, `over/under 2.5`)
+bez podawania wszystkich kolumn:
+
+    from src.features import add_power_implied_probabilities_standard_markets
+
+    df = add_power_implied_probabilities_standard_markets(
+        df,
+        odds_prefix="trimmed_avg",  # domyslnie trimmed_avg
+        errors="coerce",
+    )
+
+Mozesz tez wybrac inny prefiks kursow:
+
+    df = add_power_implied_probabilities_standard_markets(df, odds_prefix="max")
