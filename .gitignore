@@ -47,3 +47,6 @@ logs/
 
 # VSCode settings
 .vscode/
+
+# Cursor settings
+.cursor/

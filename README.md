@@ -28,4 +28,24 @@
     │   └── visualization/    <- Funkcje pomocnicze do tworzenia wykresów.
     │
     └── OddsHarvester/        <- Zewnętrzne narzędzie do scrapowania (sub-repozytorium).
-    
+
+## Przygotowanie danych (src/data)
+
+Warstwa `src/data` przygotowuje dane do dalszych krokow.
+
+Przykład uzycia w notatniku:
+
+    from src.data import load_raw_seasons, add_odds_columns
+
+    raw_df = load_raw_seasons("data/raw/1liga_*.json")
+    df = add_odds_columns(raw_df, trim_drop=1)
+
+lub:
+
+    from src.data import load_and_add_odds_columns
+    df = load_and_add_odds_columns(pattern="data/raw/1liga_*.json", trim_drop=1)
+
+wersja compact (usuwa surowe kolumny marketow po wyliczeniu kursow):
+
+    from src.data import load_and_add_odds_columns_compact
+    df = load_and_add_odds_columns_compact(pattern="data/raw/1liga_*.json", trim_drop=1)
