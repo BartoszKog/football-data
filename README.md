@@ -50,6 +50,14 @@ wersja compact (usuwa surowe kolumny marketow po wyliczeniu kursow):
     from src.data import load_and_add_odds_columns_compact
     df = load_and_add_odds_columns_compact(pattern="data/raw/1liga_*.json", trim_drop=1)
 
+mozna tez wybrac tylko jeden typ kursow, np. tylko `trimmed_avg_*`:
+
+    df = load_and_add_odds_columns_compact(
+        pattern="data/raw/1liga_*.json",
+        trim_drop=1,
+        odds_metrics="trimmed_avg",
+    )
+
 ## Feature engineering (src/features)
 
 Przykład tworzenia domniemanych prawdopodobienstw z kursow metoda potegowa:

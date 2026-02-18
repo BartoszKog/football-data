@@ -13,6 +13,39 @@ MARKET_CONFIG = {
 }
 
 
+def _normalize_odds_metrics(
+    odds_metrics: str | list[str] | tuple[str, ...] | None,
+) -> set[str] | None:
+    """
+    Normalize optional odds metric selection for compact outputs.
+
+    Allowed metric names:
+    - `max`
+    - `avg`
+    - `trimmed_avg`
+    """
+    if odds_metrics is None:
+        return None
+
+    if isinstance(odds_metrics, str):
+        metrics = {odds_metrics}
+    else:
+        metrics = set(odds_metrics)
+
+    if not metrics:
+        raise ValueError("odds_metrics cannot be empty when provided.")
+
+    allowed = {"max", "avg", "trimmed_avg"}
+    invalid = metrics - allowed
+    if invalid:
+        raise ValueError(
+            "Unsupported odds_metrics values: "
+            f"{sorted(invalid)}. Allowed values: {sorted(allowed)}."
+        )
+
+    return metrics
+
+
 def add_odds_columns(
     matches_df: pd.DataFrame,
     trim_drop: int = 1,
@@ -160,6 +193,7 @@ def load_and_add_odds_columns_compact(
     pattern: str = "data/raw/1liga_*.json",
     trim_drop: int = 1,
     sort_by_date: bool = True,
+    odds_metrics: str | list[str] | tuple[str, ...] | None = None,
 ) -> pd.DataFrame:
     """
     Load raw season files, add odds columns, and remove raw market columns.
@@ -180,16 +214,45 @@ def load_and_add_odds_columns_compact(
         Number of lowest and highest odds values dropped in trimmed mean.
     sort_by_date:
         If True, sort output by `match_date`.
+    odds_metrics:
+        Optional selection of odds metric prefixes to keep in output.
+        Allowed values: `max`, `avg`, `trimmed_avg`.
+        Examples:
+        - `None` (default): keep all odds columns (`max_*`, `avg_*`, `trimmed_avg_*`)
+        - `"trimmed_avg"`: keep only `trimmed_avg_*`
+        - `["max", "trimmed_avg"]`: keep only `max_*` and `trimmed_avg_*`
 
     Returns
     -------
     pd.DataFrame
         Prepared DataFrame with odds features and without raw market columns.
+        If `odds_metrics` is provided, only selected odds metric columns are kept.
     """
-    return load_and_add_odds_columns(
+    df = load_and_add_odds_columns(
         pattern=pattern,
         trim_drop=trim_drop,
         sort_by_date=sort_by_date,
         drop_source_market_columns=True,
     )
+
+    selected_metrics = _normalize_odds_metrics(odds_metrics)
+    if selected_metrics is None:
+        return df
+
+    all_metric_prefixes = ("max_", "avg_", "trimmed_avg_")
+    keep_prefixes = tuple[str, ...](f"{metric}_" for metric in selected_metrics)
+    drop_prefixes = tuple[str, ...](
+        prefix for prefix in all_metric_prefixes if prefix not in keep_prefixes
+    )
+
+    if not drop_prefixes:
+        return df
+
+    odds_cols_to_drop = [
+        col for col in df.columns if col.startswith(drop_prefixes)
+    ]
+    if not odds_cols_to_drop:
+        return df
+
+    return df.drop(columns=odds_cols_to_drop)
 
