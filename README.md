@@ -24,7 +24,7 @@
     ├── src/                  <- Kod źródłowy projektu (moduły Python).
     │   ├── data/             <- Skrypty do pobierania i przetwarzania danych.
     │   ├── features/         <- Skrypty do inżynierii cech (np. wyliczanie formy drużyny).
-    │   ├── models/           <- Skrypty do trenowania modeli i predykcji.
+    │   ├── models/           <- Modele predykcyjne (ML i statystyczne) oraz ewaluacja.
     │   └── visualization/    <- Funkcje pomocnicze do tworzenia wykresów.
     │
     └── OddsHarvester/        <- Zewnętrzne narzędzie do scrapowania (sub-repozytorium).
@@ -97,3 +97,132 @@ bez podawania wszystkich kolumn:
 Mozesz tez wybrac inny prefiks kursow:
 
     df = add_power_implied_probabilities_standard_markets(df, odds_prefix="max")
+
+## Modelowanie i ewaluacja (src/models)
+
+Warstwa `src/models` zawiera:
+
+- modele statystyczne i ML o wspolnym, prostym API,
+- osobny moduł ewaluacji predykcji wynikow (niezalezny od konkretnego modelu).
+
+Aktualnie dostepne:
+
+- `PredictiveModel`, `TrainablePredictiveModel` (`src/models/interfaces`) - wspólne kontrakty dla modeli.
+- `PoissonDixonColesModel` (`src/models/statistical`) - predykcja scoreline z korekta Dixon-Colesa,
+- `ScoreRule`, `score_single_prediction`, `evaluate_score_predictions` (`src/models/evaluation`) - uniwersalna punktacja i metryki.
+
+Przykład uzycia:
+
+    from src.models import PoissonDixonColesModel, evaluate_score_predictions
+
+    model = PoissonDixonColesModel(
+        prob_home_col="prob_1",
+        prob_away_col="prob_2",
+        prob_over25_col="prob_over_25",
+        rho=-0.06,
+        bias_correction=1.05,
+    )
+
+    pred_df = model.predict(df)
+
+    metrics = evaluate_score_predictions(
+        pred_df,
+        pred_home_col="pred_home_goals",
+        pred_away_col="pred_away_goals",
+        actual_home_col="home_score",
+        actual_away_col="away_score",
+    )
+
+Przykład pracy przez kontrakt interfejsu:
+
+    from src.models import PredictiveModel, PoissonDixonColesModel
+
+    model: PredictiveModel = PoissonDixonColesModel(rho=-0.06)
+    pred_df = model.predict(df)
+
+## Tuning modeli (src/models/tuning)
+
+Mozesz uruchomic uniwersalny grid search dla kazdego modelu zgodnego z `PredictiveModel`.
+Wspierane sa:
+
+- ranking po `avg_points` (domyslnie) lub innym `score_key`,
+- wlasna metryka przez callback `metric_fn`,
+- wykres 1D (jeden parametr) i 2D (dwa parametry),
+- cache do JSON miedzy uruchomieniami notebooka.
+
+Przykład grid search + cache:
+
+    from src.models import (
+        PoissonDixonColesModel,
+        build_param_grid,
+        run_predictive_grid_search,
+        plot_grid_search_1d,
+    )
+
+    def model_factory(**params):
+        return PoissonDixonColesModel(**params)
+
+    param_grid = build_param_grid(
+        {
+            "rho": {"start": -0.12, "stop": 0.0, "step": 0.04},
+        }
+    )
+
+    search = run_predictive_grid_search(
+        model_factory=model_factory,
+        param_grid=param_grid,
+        df=df,
+        score_key="avg_points",
+        cache_mode="use",  # off/use/refresh
+    )
+
+    ax = plot_grid_search_1d(search.results_df, param_name="rho")
+
+Przykład wykresu 2D:
+
+    from src.models import plot_grid_search_2d
+
+    search_2d = run_predictive_grid_search(
+        model_factory=model_factory,
+        param_grid={
+            "rho": [-0.10, -0.05, 0.0],
+            "bias_correction": [0.95, 1.00, 1.05, 1.10],
+        },
+        df=df,
+        cache_mode="use",
+    )
+
+    ax = plot_grid_search_2d(
+        search_2d.results_df,
+        x_param="bias_correction",
+        y_param="rho",
+    )
+
+Wersja dla modeli trenowanych (`TrainablePredictiveModel`) uzywa walidacji czasowej
+walk-forward i wykonuje petle:
+`fit(train_fold) -> predict(valid_fold) -> evaluate`.
+
+Przykład trainable grid search (time-series):
+
+    from src.models import run_trainable_grid_search
+
+    trainable_search = run_trainable_grid_search(
+        model_factory=trainable_model_factory,
+        param_grid={
+            "alpha": [0.1, 0.5, 1.0],
+            "l2": [0.0, 0.01, 0.1],
+        },
+        df=df,
+        n_splits=4,
+        min_train_size=500,
+        valid_size=100,
+        score_key="avg_points",
+        cache_mode="use",
+    )
+
+    # te same helpery wykresow:
+    ax = plot_grid_search_2d(
+        trainable_search.results_df,
+        x_param="alpha",
+        y_param="l2",
+    )
