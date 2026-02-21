@@ -7,6 +7,7 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+import time
 from typing import Any, Callable, Literal, Mapping, Sequence
 
 import matplotlib.pyplot as plt
@@ -86,6 +87,7 @@ def run_predictive_grid_search(
     cache_dir: str | Path = "outputs/reports/grid_search_cache",
     model_name: str | None = None,
     data_fingerprint_columns: Sequence[str] | None = None,
+    show_progress: bool = True,
 ) -> GridSearchResult:
     """Run grid search over 1D/2D parameter grid for predictive models.
 
@@ -130,6 +132,8 @@ def run_predictive_grid_search(
     data_fingerprint_columns:
         Columns used to build input fingerprint. If ``None``, all columns
         are used.
+    show_progress:
+        Whether to display a text progress bar with elapsed time and ETA.
     """
     _validate_param_grid(param_grid)
     _validate_cache_mode(cache_mode)
@@ -155,8 +159,16 @@ def run_predictive_grid_search(
 
     combinations = _parameter_combinations(param_grid)
     result_rows: list[dict[str, Any]] = []
+    progress_start = time.perf_counter()
+    if show_progress:
+        _print_progress(
+            description="Predictive grid search",
+            current=0,
+            total=len(combinations),
+            started_at=progress_start,
+        )
 
-    for params in combinations:
+    for index, params in enumerate(combinations, start=1):
         model = model_factory(**params)
         if not isinstance(model, PredictiveModel):
             raise TypeError("model_factory must return an object implementing PredictiveModel.")
@@ -175,6 +187,15 @@ def run_predictive_grid_search(
 
         row = {**params, **metrics, "objective_metric": objective}
         result_rows.append(row)
+        if show_progress:
+            _print_progress(
+                description="Predictive grid search",
+                current=index,
+                total=len(combinations),
+                started_at=progress_start,
+            )
+    if show_progress:
+        print()
 
     results_df = pd.DataFrame(result_rows)
     results_df = results_df.sort_values(by="objective_metric", ascending=False).reset_index(
@@ -469,3 +490,40 @@ def _format_param_value(value: Any) -> str:
         text = np.format_float_positional(float(value), precision=10, trim="-")
         return "0" if text in {"-0", "-0.0"} else text
     return str(value)
+
+
+def _print_progress(
+    *,
+    description: str,
+    current: int,
+    total: int,
+    started_at: float,
+    width: int = 30,
+) -> None:
+    safe_total = max(total, 1)
+    bounded_current = min(max(current, 0), safe_total)
+    ratio = bounded_current / safe_total
+    filled = int(width * ratio)
+    bar = f"{'=' * filled}{'-' * (width - filled)}"
+    elapsed = max(time.perf_counter() - started_at, 0.0)
+    speed = (bounded_current / elapsed) if elapsed > 0 else 0.0
+    remaining = ((safe_total - bounded_current) / speed) if speed > 0 else None
+    eta_text = _format_seconds(remaining)
+    elapsed_text = _format_seconds(elapsed)
+    print(
+        f"\r{description}: [{bar}] {bounded_current}/{safe_total} "
+        f"| elapsed {elapsed_text} | eta {eta_text}",
+        end="",
+        flush=True,
+    )
+
+
+def _format_seconds(seconds: float | None) -> str:
+    if seconds is None:
+        return "--:--"
+    whole_seconds = max(int(round(seconds)), 0)
+    hours, remainder = divmod(whole_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"

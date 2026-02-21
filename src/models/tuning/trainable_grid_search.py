@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Callable, Sequence, Mapping
 
 import pandas as pd
@@ -13,6 +14,7 @@ from .grid_search import (
     GridSearchResult,
     _build_cache_path,
     _parameter_combinations,
+    _print_progress,
     _read_cache_result,
     _to_jsonable_scalar,
     _validate_cache_mode,
@@ -41,6 +43,7 @@ def run_trainable_grid_search(
     cache_dir: str = "outputs/reports/grid_search_cache",
     model_name: str | None = None,
     data_fingerprint_columns: Sequence[str] | None = None,
+    show_progress: bool = True,
 ) -> GridSearchResult:
     """Run walk-forward grid search for trainable predictive models.
 
@@ -97,6 +100,8 @@ def run_trainable_grid_search(
     data_fingerprint_columns:
         Optional list of columns used to build cache data fingerprint.
         If ``None``, defaults to time and evaluation-related columns when available.
+    show_progress:
+        Whether to display a text progress bar with elapsed time and ETA.
 
     Returns
     -------
@@ -166,8 +171,20 @@ def run_trainable_grid_search(
         if cache_mode == "use" and cache_path.exists():
             return _read_cache_result(cache_path)
 
+    combinations = _parameter_combinations(param_grid)
+    total_steps = len(combinations) * len(folds)
+    completed_steps = 0
+    progress_start = time.perf_counter()
+    if show_progress:
+        _print_progress(
+            description="Trainable grid search",
+            current=0,
+            total=total_steps,
+            started_at=progress_start,
+        )
+
     rows: list[dict[str, Any]] = []
-    for params in _parameter_combinations(param_grid):
+    for params in combinations:
         fold_metrics: list[dict[str, Any]] = []
         for fold in folds:
             model = model_factory(**params)
@@ -192,6 +209,14 @@ def run_trainable_grid_search(
                 actual_away_col=actual_away_col,
             )
             fold_metrics.append(metrics)
+            completed_steps += 1
+            if show_progress:
+                _print_progress(
+                    description="Trainable grid search",
+                    current=completed_steps,
+                    total=total_steps,
+                    started_at=progress_start,
+                )
 
         aggregated = _aggregate_fold_metrics(fold_metrics)
         objective = (
@@ -221,6 +246,9 @@ def run_trainable_grid_search(
 
     if cache_path is not None:
         _write_cache_result(cache_path, result)
+
+    if show_progress:
+        print()
 
     return result
 
