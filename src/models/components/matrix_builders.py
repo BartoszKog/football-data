@@ -17,7 +17,14 @@ class ProbabilityMatrixBuilder(Protocol):
 
 
 class PoissonMatrixBuilder(ProbabilityMatrixBuilder):
-    """Build Poisson scoreline matrix with Dixon-Coles low-score correction."""
+    """Build Poisson scoreline matrix with Dixon-Coles low-score correction.
+
+    The implementation is vectorized for backtesting workloads:
+    - one goals vector is created with ``np.arange``,
+    - home and away PMF vectors are evaluated once each,
+    - the base matrix is computed with ``np.outer``,
+    - Dixon-Coles correction is applied only to the four low-score cells.
+    """
 
     def __init__(self, *, rho: float, max_goals_matrix: int) -> None:
         """Initialize Poisson matrix builder configuration."""
@@ -31,49 +38,45 @@ class PoissonMatrixBuilder(ProbabilityMatrixBuilder):
         self.max_goals_matrix = max_goals_value
 
     def build_matrix(self, lambda_home: float, lambda_away: float) -> np.ndarray:
-        """Build normalized probability matrix for the provided goal rates."""
+        """Build normalized scoreline probability matrix.
+
+        Parameters
+        ----------
+        lambda_home:
+            Expected goals for the home team.
+        lambda_away:
+            Expected goals for the away team.
+
+        Returns
+        -------
+        np.ndarray
+            A 2D matrix of shape ``(max_goals_matrix + 1, max_goals_matrix + 1)``
+            where ``matrix[i, j]`` is the probability of score ``i:j``.
+
+        Notes
+        -----
+        Dixon-Coles correction is only needed for outcomes:
+        ``(0,0)``, ``(0,1)``, ``(1,0)``, ``(1,1)``.
+        """
         if not np.isfinite(lambda_home) or not np.isfinite(lambda_away):
             raise ValueError("lambda_home and lambda_away must be finite.")
         if lambda_home < 0 or lambda_away < 0:
             raise ValueError("lambda_home and lambda_away must be non-negative.")
         size = self.max_goals_matrix + 1
-        matrix = np.zeros((size, size), dtype=float)
+        goals = np.arange(size)
+        p_home = poisson.pmf(goals, lambda_home)
+        p_away = poisson.pmf(goals, lambda_away)
+        # Independent Poisson assumptions: P(X=i, Y=j) = P(X=i) * P(Y=j).
+        matrix = np.outer(p_home, p_away)
 
-        for home_goals in range(size):
-            p_home = poisson.pmf(home_goals, lambda_home)
-            for away_goals in range(size):
-                p_away = poisson.pmf(away_goals, lambda_away)
-                base_prob = p_home * p_away
-                correction = self._dixon_coles_tau(
-                    home_goals=home_goals,
-                    away_goals=away_goals,
-                    lambda_home=lambda_home,
-                    lambda_away=lambda_away,
-                    rho=self.rho,
-                )
-                matrix[home_goals, away_goals] = base_prob * correction
+        # Dixon-Coles low-score correction affects only these four outcomes.
+        matrix[0, 0] *= 1.0 - (lambda_home * lambda_away * self.rho)
+        matrix[0, 1] *= 1.0 + (lambda_home * self.rho)
+        matrix[1, 0] *= 1.0 + (lambda_away * self.rho)
+        matrix[1, 1] *= 1.0 - self.rho
 
         matrix = np.clip(matrix, 0.0, None)
         matrix_sum = float(matrix.sum())
         if matrix_sum <= 0:
             raise ValueError("probability matrix sum is not positive.")
         return matrix / matrix_sum
-
-    @staticmethod
-    def _dixon_coles_tau(
-        *,
-        home_goals: int,
-        away_goals: int,
-        lambda_home: float,
-        lambda_away: float,
-        rho: float,
-    ) -> float:
-        if home_goals == 0 and away_goals == 0:
-            return 1.0 - (lambda_home * lambda_away * rho)
-        if home_goals == 0 and away_goals == 1:
-            return 1.0 + (lambda_home * rho)
-        if home_goals == 1 and away_goals == 0:
-            return 1.0 + (lambda_away * rho)
-        if home_goals == 1 and away_goals == 1:
-            return 1.0 - rho
-        return 1.0

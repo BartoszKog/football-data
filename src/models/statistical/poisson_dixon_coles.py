@@ -77,8 +77,8 @@ class PoissonDixonColesModel(PredictiveModel):
             ``max_goals_matrix``.
         optimizer:
             Optional score optimizer dependency. If omitted, the model uses
-            ``ExpectedPointsOptimizer`` configured with ``points_rule`` and
-            ``max_goals_prediction``.
+            ``ExpectedPointsOptimizer`` configured with ``points_rule``,
+            ``max_goals_prediction`` and ``max_goals_matrix``.
         errors:
             Row-level error policy:
             - ``"coerce"`` returns NaN predictions for invalid rows,
@@ -103,6 +103,7 @@ class PoissonDixonColesModel(PredictiveModel):
             optimizer = ExpectedPointsOptimizer(
                 rules=points_rule or ExpectedPointsRule(),
                 max_goals_prediction=self.max_goals_prediction,
+                max_goals_matrix=self.max_goals_matrix,
             )
         if not isinstance(matrix_builder, ProbabilityMatrixBuilder):
             raise TypeError(
