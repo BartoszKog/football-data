@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy import optimize
 from scipy.stats import poisson
+from scipy.interpolate import interp1d
 
 from ..components import (
     ExpectedPointsOptimizer,
@@ -48,6 +49,7 @@ class PoissonDixonColesModel(PredictiveModel):
         matrix_builder: ProbabilityMatrixBuilder | None = None,
         optimizer: ScoreOptimizer | None = None,
         errors: Literal["coerce", "raise"] = "coerce",
+        use_over25_interpolation: bool = False,
     ) -> None:
         """Initialize model configuration.
 
@@ -83,6 +85,12 @@ class PoissonDixonColesModel(PredictiveModel):
             Row-level error policy:
             - ``"coerce"`` returns NaN predictions for invalid rows,
             - ``"raise"`` raises with row index context.
+        use_over25_interpolation:
+            When ``True``, approximate the mapping from over-2.5-goals
+            probability to total expected goals with a pre-computed linear
+            interpolator constructed at initialization time. When ``False``
+            (default), solve the mapping exactly for each row via a
+            root-finding routine (``scipy.optimize.brentq``).
         """
         self.prob_home_col = prob_home_col
         self.prob_away_col = prob_away_col
@@ -92,6 +100,8 @@ class PoissonDixonColesModel(PredictiveModel):
         self.max_goals_matrix = int(max_goals_matrix)
         self.max_goals_prediction = int(max_goals_prediction)
         self.errors = errors
+        self.use_over25_interpolation = bool(use_over25_interpolation)
+        self._over25_to_total_lambda_interp = None
 
         self._validate_configuration()
         if matrix_builder is None:
@@ -114,6 +124,9 @@ class PoissonDixonColesModel(PredictiveModel):
 
         self.matrix_builder: ProbabilityMatrixBuilder = matrix_builder
         self.optimizer: ScoreOptimizer = optimizer
+
+        if self.use_over25_interpolation:
+            self._initialize_over25_interpolator()
 
     def predict(self, df: pd.DataFrame) -> pd.DataFrame:
         """Return a copy of DataFrame with model score predictions.
@@ -156,7 +169,7 @@ class PoissonDixonColesModel(PredictiveModel):
             output_rows.append(result)
 
         output = pd.DataFrame(output_rows, index=df.index)
-        return pd.concat([df.copy(), output], axis=1)
+        return pd.concat([df.copy(), output], axis=1, verify_integrity=True)
 
     def _validate_configuration(self) -> None:
         if self.errors not in {"coerce", "raise"}:
@@ -222,15 +235,6 @@ class PoissonDixonColesModel(PredictiveModel):
             raise ValueError("prob_over25 must be in open interval (0, 1).")
 
     @staticmethod
-    def _solve_total_lambda_from_over25(prob_over25: float) -> float:
-        target_prob = float(np.clip(prob_over25, 1e-6, 1 - 1e-6))
-
-        def objective(total_lambda: float) -> float:
-            return (1.0 - poisson.cdf(2, total_lambda)) - target_prob
-
-        return float(optimize.brentq(objective, 1e-6, 20.0, maxiter=200))
-
-    @staticmethod
     def _split_total_lambda(
         *,
         total_lambda: float,
@@ -241,4 +245,44 @@ class PoissonDixonColesModel(PredictiveModel):
         lambda_home = total_lambda * share_home
         lambda_away = total_lambda * (1.0 - share_home)
         return float(lambda_home), float(lambda_away)
+
+    def _initialize_over25_interpolator(self) -> None:
+        """Pre-compute interpolation for mapping prob_over25 -> total_lambda."""
+        # Choose a reasonably fine grid; can be adjusted if needed.
+        grid_probs = np.linspace(1e-4, 1.0 - 1e-4, 201)
+        grid_lambdas = np.array(
+            [
+                self._solve_total_lambda_from_over25_brentq(float(p))
+                for p in grid_probs
+            ]
+        )
+        self._over25_to_total_lambda_interp = interp1d(
+            grid_probs,
+            grid_lambdas,
+            kind="linear",
+            fill_value="extrapolate",
+            assume_sorted=True,
+        )
+
+    def _solve_total_lambda_from_over25(self, prob_over25: float) -> float:
+        """Map over-2.5 probability to total expected goals.
+
+        Uses a precomputed linear interpolator when enabled, otherwise falls
+        back to an exact per-row root finding via Brent's method.
+        """
+        target_prob = float(np.clip(prob_over25, 1e-6, 1.0 - 1e-6))
+
+        if self._over25_to_total_lambda_interp is not None:
+            return float(self._over25_to_total_lambda_interp(target_prob))
+
+        return self._solve_total_lambda_from_over25_brentq(target_prob)
+
+    @staticmethod
+    def _solve_total_lambda_from_over25_brentq(prob_over25: float) -> float:
+        target_prob = float(np.clip(prob_over25, 1e-6, 1.0 - 1e-6))
+
+        def objective(total_lambda: float) -> float:
+            return (1.0 - poisson.cdf(2, total_lambda)) - target_prob
+
+        return float(optimize.brentq(objective, 1e-6, 20.0, maxiter=200))
 
