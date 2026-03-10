@@ -109,7 +109,8 @@ Aktualnie dostepne:
 
 - `PredictiveModel`, `TrainablePredictiveModel` (`src/models/interfaces`) - wspólne kontrakty dla modeli.
 - `PoissonDixonColesModel` (`src/models/statistical`) - predykcja scoreline z korekta Dixon-Colesa,
-- `ScoreRule`, `score_single_prediction`, `evaluate_score_predictions` (`src/models/evaluation`) - uniwersalna punktacja i metryki.
+- `ScoreRule`, `score_single_prediction`, `compute_points_per_match`, `evaluate_score_predictions` (`src/models/evaluation`) - uniwersalna punktacja i metryki.
+- `plot_predictions_summary`, `summarize_predictions_1x2`, `PointsSummary1x2` (`src/models/evaluation`) - wizualizacja ewaluacji (rozkład punktów, macierz 1x2).
 
 Przykład uzycia:
 
@@ -132,6 +133,20 @@ Przykład uzycia:
         actual_home_col="home_score",
         actual_away_col="away_score",
     )
+
+Wizualizacja predykcji (rozkład punktów, macierz 1x2, suma i średnia punktów):
+
+    from src.models import plot_predictions_summary
+
+    plot_predictions_summary(pred_df, model_name="Poisson Dixon-Coles")
+
+Funkcja sama liczy punkty wewnętrznie; domyślne kolumny to `pred_home_goals`, `pred_away_goals`, `home_score`, `away_score`. Do innych analiz możesz użyć `summarize_predictions_1x2`:
+
+    from src.models import summarize_predictions_1x2
+
+    summary = summarize_predictions_1x2(pred_df)
+    print(summary.total_points, summary.mean_points)
+    # summary.points_distribution, summary.outcome_matrix
 
 Przykład pracy przez kontrakt interfejsu:
 

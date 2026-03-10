@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.20.4"
+__generated_with = "0.19.10"
 app = marimo.App(width="medium")
 
 
@@ -98,8 +98,15 @@ def _():
 def _():
     from src.data import load_and_add_odds_columns_compact
     from src.features import add_power_implied_probabilities_standard_markets
-    from src.models import PoissonDixonColesModel, evaluate_score_predictions, score_single_prediction
-    from src.models import run_predictive_grid_search, plot_grid_search_2d, build_param_grid
+    from src.models import (
+        PoissonDixonColesModel,
+        compute_points_per_match,
+        evaluate_score_predictions,
+        plot_predictions_summary,
+        run_predictive_grid_search,
+        plot_grid_search_2d,
+        build_param_grid,
+    )
     import matplotlib.pyplot as plt
     import pandas as pd
     import seaborn as sns
@@ -108,13 +115,13 @@ def _():
         PoissonDixonColesModel,
         add_power_implied_probabilities_standard_markets,
         build_param_grid,
+        compute_points_per_match,
         load_and_add_odds_columns_compact,
         pd,
         plot_grid_search_2d,
+        plot_predictions_summary,
         plt,
         run_predictive_grid_search,
-        score_single_prediction,
-        sns,
     )
 
 
@@ -522,16 +529,8 @@ def _(df_potential_best):
 
 
 @app.cell
-def _(df_potential_best, score_single_prediction):
-    df_potential_best['points_score'] = df_potential_best.apply(
-        lambda row: score_single_prediction(
-            pred_home=row['pred_home_goals'],
-            pred_away=row['pred_away_goals'],
-            actual_home=row['home_score'],
-            actual_away=row['away_score']
-        ), 
-        axis=1
-    )
+def _(compute_points_per_match, df_potential_best):
+    df_potential_best['points_score'] = compute_points_per_match(df_potential_best)
     return
 
 
@@ -582,46 +581,8 @@ def _(mo):
 
 
 @app.cell
-def _(df_potential_best, pd, plt, sns):
-    # Rozkład zdobytych punktów - tylko do wykresu, więc z "_"
-    _points_distribution = df_potential_best['points_score'].value_counts().sort_index()
-
-    # Funkcja pomocnicza - z "_"
-    def get_1x2(home_goals, away_goals):
-        if home_goals > away_goals: return '1'
-        elif home_goals == away_goals: return 'X'
-        else: return '2'
-
-    # Aktualizujemy główny DataFrame - tego będziesz używał, więc zostaje bez "_"
-    df_potential_best['actual_1x2'] = df_potential_best.apply(
-        lambda _r: get_1x2(_r['home_score'], _r['away_score']), axis=1
-    )
-    df_potential_best['pred_1x2'] = df_potential_best.apply(
-        lambda _r: get_1x2(_r['pred_home_goals'], _r['pred_away_goals']), axis=1
-    )
-
-    # Macierz pomyłek - zostawiam globalnie, może zechcesz z niej wyciągnąć dokładne liczby
-    cm_1x2 = pd.crosstab(
-        df_potential_best['actual_1x2'], 
-        df_potential_best['pred_1x2'], 
-        rownames=['Rzeczywisty Wynik'], 
-        colnames=['Typ Modelu']
-    )
-
-    _fig, (_ax1, _ax2) = plt.subplots(1, 2, figsize=(14, 5))
-
-    _bars = _ax1.bar(_points_distribution.index, _points_distribution.values, color=['red', 'orange', 'lightgreen', 'green'])
-    _ax1.set_title('Rozkład zdobywanych punktów (0, 1, 2, 3)')
-    _ax1.set_xlabel('Punkty')
-    _ax1.set_ylabel('Liczba meczów')
-    _ax1.set_xticks([0, 1, 2, 3])
-    _ax1.bar_label(_bars)
-
-    sns.heatmap(cm_1x2, annot=True, fmt='d', cmap='Blues', ax=_ax2)
-    _ax2.set_title('Macierz Pomyłek 1X2')
-
-    plt.tight_layout()
-    plt.show()
+def _(df_potential_best, plot_predictions_summary):
+    plot_predictions_summary(df_potential_best, model_name="Poisson Dixon-Coles (baseline)")
     return
 
 

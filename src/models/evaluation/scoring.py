@@ -53,6 +53,71 @@ def score_single_prediction(
     return scoring_rule.miss
 
 
+def compute_points_per_match(
+    df: pd.DataFrame,
+    *,
+    pred_home_col: str = "pred_home_goals",
+    pred_away_col: str = "pred_away_goals",
+    actual_home_col: str = "home_score",
+    actual_away_col: str = "away_score",
+    rule: ScoreRule | None = None,
+) -> pd.Series:
+    """Return points per match for scoreline predictions.
+
+    Parameters
+    ----------
+    df:
+        DataFrame with prediction and actual result columns.
+    pred_home_col, pred_away_col:
+        Column names with model score predictions.
+    actual_home_col, actual_away_col:
+        Column names with observed match scores.
+    rule:
+        Optional custom scoring rule.
+
+    Returns
+    -------
+    pd.Series
+        Points per row (int), index aligned with valid rows after dropna.
+        Rows with NaN in required columns are excluded.
+    """
+    scoring_rule = rule or ScoreRule()
+
+    required_cols = [pred_home_col, pred_away_col, actual_home_col, actual_away_col]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing required columns for evaluation: {missing_cols}")
+
+    data = df.copy()
+    for column in required_cols:
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+
+    data = data.dropna(subset=required_cols)
+    if data.empty:
+        return pd.Series(dtype=int)
+
+    pred_home = np.rint(data[pred_home_col].to_numpy(dtype=float)).astype(int)
+    pred_away = np.rint(data[pred_away_col].to_numpy(dtype=float)).astype(int)
+    actual_home = np.rint(data[actual_home_col].to_numpy(dtype=float)).astype(int)
+    actual_away = np.rint(data[actual_away_col].to_numpy(dtype=float)).astype(int)
+
+    points = np.array(
+        [
+            score_single_prediction(
+                pred_home=int(ph),
+                pred_away=int(pa),
+                actual_home=int(ah),
+                actual_away=int(aa),
+                rule=scoring_rule,
+            )
+            for ph, pa, ah, aa in zip(pred_home, pred_away, actual_home, actual_away)
+        ],
+        dtype=int,
+    )
+
+    return pd.Series(points, index=data.index, dtype=int)
+
+
 def evaluate_score_predictions(
     df: pd.DataFrame,
     *,

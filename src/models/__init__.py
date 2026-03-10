@@ -6,7 +6,11 @@ Public API:
 - TrainablePredictiveModel
 - ScoreRule
 - score_single_prediction
+- compute_points_per_match
 - evaluate_score_predictions
+- PointsSummary1x2
+- summarize_predictions_1x2
+- plot_predictions_summary
 - GridSearchResult
 - build_param_grid
 - run_predictive_grid_search
@@ -17,7 +21,15 @@ Public API:
 - plot_grid_search_2d
 """
 
-from .evaluation import ScoreRule, evaluate_score_predictions, score_single_prediction
+from .evaluation import (
+    PointsSummary1x2,
+    ScoreRule,
+    compute_points_per_match,
+    evaluate_score_predictions,
+    plot_predictions_summary,
+    score_single_prediction,
+    summarize_predictions_1x2,
+)
 from .interfaces import PredictiveModel, TrainablePredictiveModel
 from .statistical import PoissonDixonColesModel
 from .tuning import (
@@ -37,7 +49,11 @@ __all__ = [
     "TrainablePredictiveModel",
     "ScoreRule",
     "score_single_prediction",
+    "compute_points_per_match",
     "evaluate_score_predictions",
+    "PointsSummary1x2",
+    "summarize_predictions_1x2",
+    "plot_predictions_summary",
     "GridSearchResult",
     "TimeSeriesFold",
     "build_param_grid",
