@@ -241,3 +241,36 @@ Przykład trainable grid search (time-series):
         x_param="alpha",
         y_param="l2",
     )
+
+### **Dwa tryby walk-forward dla modeli trenowalnych**
+
+- **2-way (wierszowy):** `make_walk_forward_splits` + `run_trainable_grid_search` —
+  `fit(train_df)` (pierwszy argument; `eval_df` opcjonalnie `None`), potem
+  `predict(valid_df)` na zbiorze walidacyjnym folda — na nim liczone są metryki.
+- **3-way (sezonowy):** `make_season_walk_forward_splits` +
+  `run_trainable_grid_search_three_way` — `fit(train_df, eval_df=val_df)` na sezonie
+  walidacyjnym (np. early stopping), metryki wyłącznie na osobnym sezonie eval
+  (bez wycieku val do końcowej oceny).
+
+Przykład sezonowego grid searcha (po wcześniejszym odcięciu holdoutu z `df`):
+
+    from src.models.tuning import (
+        make_season_walk_forward_splits,
+        run_trainable_grid_search_three_way,
+    )
+
+    historical_df = df[df["season"].isin(historical_seasons)].copy()
+    folds = make_season_walk_forward_splits(
+        historical_df,
+        season_col="season",
+        seasons_order=historical_seasons,
+    )
+    search_3 = run_trainable_grid_search_three_way(
+        model_factory=trainable_model_factory,
+        param_grid={"alpha": [0.1, 0.5]},
+        df=historical_df,
+        folds=folds,
+        datetime_col="match_date",
+        score_key="avg_points",
+        cache_mode="off",
+    )

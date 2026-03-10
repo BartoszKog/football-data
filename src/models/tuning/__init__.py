@@ -6,7 +6,10 @@ Public API:
 - run_predictive_grid_search
 - TimeSeriesFold
 - make_walk_forward_splits
+- SeasonWalkForwardFold
+- make_season_walk_forward_splits
 - run_trainable_grid_search
+- run_trainable_grid_search_three_way
 - plot_grid_search_1d
 - plot_grid_search_2d
 """
@@ -18,8 +21,16 @@ from .grid_search import (
     plot_grid_search_2d,
     run_predictive_grid_search,
 )
-from .time_splits import TimeSeriesFold, make_walk_forward_splits
-from .trainable_grid_search import run_trainable_grid_search
+from .time_splits import (
+    SeasonWalkForwardFold,
+    TimeSeriesFold,
+    make_season_walk_forward_splits,
+    make_walk_forward_splits,
+)
+from .trainable_grid_search import (
+    run_trainable_grid_search,
+    run_trainable_grid_search_three_way,
+)
 
 __all__ = [
     "GridSearchResult",
@@ -27,7 +38,10 @@ __all__ = [
     "run_predictive_grid_search",
     "TimeSeriesFold",
     "make_walk_forward_splits",
+    "SeasonWalkForwardFold",
+    "make_season_walk_forward_splits",
     "run_trainable_grid_search",
+    "run_trainable_grid_search_three_way",
     "plot_grid_search_1d",
     "plot_grid_search_2d",
 ]
