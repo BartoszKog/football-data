@@ -1,6 +1,7 @@
 """Modeling package for football match score prediction and evaluation.
 
 Public API:
+- XGBoostPoissonModel
 - PoissonDixonColesModel
 - PredictiveModel
 - TrainablePredictiveModel
@@ -31,6 +32,7 @@ from .evaluation import (
     summarize_predictions_1x2,
 )
 from .interfaces import PredictiveModel, TrainablePredictiveModel
+from .ml import XGBoostPoissonModel
 from .statistical import PoissonDixonColesModel
 from .tuning import (
     GridSearchResult,
@@ -44,6 +46,7 @@ from .tuning import (
 )
 
 __all__ = [
+    "XGBoostPoissonModel",
     "PoissonDixonColesModel",
     "PredictiveModel",
     "TrainablePredictiveModel",

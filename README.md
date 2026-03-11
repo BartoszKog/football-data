@@ -109,6 +109,7 @@ Aktualnie dostepne:
 
 - `PredictiveModel`, `TrainablePredictiveModel` (`src/models/interfaces`) - wspólne kontrakty dla modeli.
 - `PoissonDixonColesModel` (`src/models/statistical`) - predykcja scoreline z korekta Dixon-Colesa,
+- `XGBoostPoissonModel` (`src/models/ml`) - para regresorów XGBoost Poisson (home/away) + optymalizacja scoreline,
 - `ScoreRule`, `score_single_prediction`, `compute_points_per_match`, `evaluate_score_predictions` (`src/models/evaluation`) - uniwersalna punktacja i metryki.
 - `plot_predictions_summary`, `summarize_predictions_1x2`, `PointsSummary1x2` (`src/models/evaluation`) - wizualizacja ewaluacji (rozkład punktów, macierz 1x2).
 
@@ -147,6 +148,86 @@ Funkcja sama liczy punkty wewnętrznie; domyślne kolumny to `pred_home_goals`, 
     summary = summarize_predictions_1x2(pred_df)
     print(summary.total_points, summary.mean_points)
     # summary.points_distribution, summary.outcome_matrix
+
+Przykład uzycia modelu XGBoost Poisson (trenowalny, wymaga `fit` przed `predict`):
+
+    import xgboost as xgb
+    from src.models import XGBoostPoissonModel, evaluate_score_predictions
+
+    features = [
+        "baseline_lambda_home", "baseline_lambda_away",
+        "prob_trimmed_avg_1", "prob_trimmed_avg_X", "prob_trimmed_avg_2",
+        "prob_trimmed_avg_over_25", "prob_trimmed_avg_btts_yes",
+        "margin_avg",
+        "value_1", "value_X", "value_2", "value_over25",
+    ]
+
+    model = XGBoostPoissonModel(
+        features_home=features,
+        features_away=features,
+        model_home=xgb.XGBRegressor(
+            objective="count:poisson",
+            n_estimators=1000,
+            max_depth=3,
+            learning_rate=0.025,
+            early_stopping_rounds=50,
+        ),
+        model_away=xgb.XGBRegressor(
+            objective="count:poisson",
+            n_estimators=1000,
+            max_depth=3,
+            learning_rate=0.025,
+            early_stopping_rounds=50,
+        ),
+    )
+
+    # fit z eval_df (early stopping) lub bez
+    model.fit(train_df, eval_df=val_df)
+    pred_df = model.predict(test_df)
+
+    metrics = evaluate_score_predictions(pred_df)
+
+Model mozna tez uzyc z sezonowym grid searchem (three-way walk-forward):
+
+    from src.models.tuning import (
+        make_season_walk_forward_splits,
+        run_trainable_grid_search_three_way,
+    )
+
+    def xgb_factory(learning_rate=0.025, rho=0.0):
+        return XGBoostPoissonModel(
+            features_home=features,
+            features_away=features,
+            model_home=xgb.XGBRegressor(
+                objective="count:poisson",
+                n_estimators=1000,
+                max_depth=3,
+                learning_rate=learning_rate,
+                early_stopping_rounds=50,
+            ),
+            model_away=xgb.XGBRegressor(
+                objective="count:poisson",
+                n_estimators=1000,
+                max_depth=3,
+                learning_rate=learning_rate,
+                early_stopping_rounds=50,
+            ),
+            rho=rho,
+        )
+
+    folds = make_season_walk_forward_splits(
+        historical_df, season_col="season", seasons_order=historical_seasons,
+    )
+    search = run_trainable_grid_search_three_way(
+        model_factory=xgb_factory,
+        param_grid={
+            "learning_rate": [0.02, 0.025, 0.03],
+            "rho": [0.0, -0.05, -0.10],
+        },
+        df=historical_df,
+        folds=folds,
+        score_key="avg_points",
+    )
 
 Przykład pracy przez kontrakt interfejsu:
 
