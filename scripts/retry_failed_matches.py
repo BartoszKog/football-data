@@ -25,6 +25,9 @@ LOGS_DIR = BASE_DIR / "logs"
 SCRAPER_DIR = BASE_DIR / "OddsHarvester"
 SCRAPER_PYTHON = SCRAPER_DIR / ".venv" / "Scripts" / "python.exe"
 
+# prefix nazwy pliku na nazwę ligii
+LEAGUE_PREFIX = "1liga_"
+
 # --------------------
 
 def get_failed_urls(log_path: Path) -> list[str]:
@@ -64,7 +67,7 @@ def run_retry_script():
         log_filename = f"scrape_log_{season}.txt"
         log_path = LOGS_DIR / log_filename
         
-        output_filename = f"1liga_{season.replace('-', '')}.json"
+        output_filename = f"{LEAGUE_PREFIX}{season.replace('-', '')}.json"
         output_path = DATA_DIR / output_filename
 
         # 1. Pobierz brakujące linki z logów

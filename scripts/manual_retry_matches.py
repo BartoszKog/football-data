@@ -25,6 +25,9 @@ LOGS_DIR = BASE_DIR / "logs"
 SCRAPER_DIR = BASE_DIR / "OddsHarvester"
 SCRAPER_PYTHON = SCRAPER_DIR / ".venv" / "Scripts" / "python.exe"
 
+# prefix nazwy pliku na nazwę ligii
+LEAGUE_PREFIX = "1liga_"
+
 # --------------------
 
 def run_manual_retry():
@@ -40,7 +43,7 @@ def run_manual_retry():
     print(f"🔧 Rozpoczynam ręczne pobieranie {len(MANUAL_URLS)} meczów dla sezonu {SEASON}...")
 
     # Ustalamy ścieżki wyjściowe
-    output_filename = f"1liga_{SEASON.replace('-', '')}.json"
+    output_filename = f"{LEAGUE_PREFIX}{SEASON.replace('-', '')}.json"
     output_path = DATA_DIR / output_filename
 
     print(f"📂 Dane zostaną dopisane do pliku: {output_filename}")

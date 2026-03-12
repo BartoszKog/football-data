@@ -24,6 +24,9 @@ LOGS_DIR = BASE_DIR / "logs"
 SCRAPER_DIR = BASE_DIR / "OddsHarvester"
 SCRAPER_PYTHON = SCRAPER_DIR / ".venv" / "Scripts" / "python.exe"
 
+# prefix nazwy pliku na nazwę ligii
+LEAGUE_PREFIX = "1liga_"
+
 # --------------------
 
 def run_batch_scraping():
@@ -41,7 +44,7 @@ def run_batch_scraping():
     for season in SEASONS_TO_SCRAPE:
         print(f"\n--- ⏳ Pobieranie sezonu {season} ---")
         
-        output_filename = f"1liga_{season.replace('-', '')}.json"
+        output_filename = f"{LEAGUE_PREFIX}{season.replace('-', '')}.json"
         output_path = DATA_DIR / output_filename
         log_path = LOGS_DIR / f"scrape_log_{season}.txt"
 
