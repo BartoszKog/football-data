@@ -129,6 +129,39 @@ class XGBoostPoissonModel(TrainablePredictiveModel):
         self.matrix_builder: ProbabilityMatrixBuilder = matrix_builder
         self.optimizer: ScoreOptimizer = optimizer
 
+    def _validate_required_columns(
+        self,
+        df: pd.DataFrame,
+        required: list[str],
+        *,
+        where: str,
+    ) -> None:
+        """Validate that all ``required`` columns are present in ``df``.
+
+        Parameters
+        ----------
+        df:
+            DataFrame to validate.
+        required:
+            Column names that must be present in ``df``.
+        where:
+            Human-readable context used in the error message, e.g.
+            ``\"train_df in fit()\"`` or ``\"df in predict()\"``.
+
+        Raises
+        ------
+        KeyError
+            If one or more required columns are missing.
+        """
+        missing = [col for col in required if col not in df.columns]
+        if missing:
+            cols = ", ".join(missing)
+            raise KeyError(
+                f"Missing required columns in {where}: {cols}. "
+                "Check that the feature engineering pipeline produced these "
+                "columns before calling the model."
+            )
+
     def fit(
         self,
         train_df: pd.DataFrame,
@@ -148,6 +181,17 @@ class XGBoostPoissonModel(TrainablePredictiveModel):
         -------
         self
         """
+        self._validate_required_columns(
+            train_df,
+            [
+                *self.features_home,
+                *self.features_away,
+                self.target_home_col,
+                self.target_away_col,
+            ],
+            where="train_df in XGBoostPoissonModel.fit()",
+        )
+
         X_train_home = train_df[self.features_home]
         X_train_away = train_df[self.features_away]
         y_train_home = train_df[self.target_home_col]
@@ -157,6 +201,17 @@ class XGBoostPoissonModel(TrainablePredictiveModel):
         fit_kwargs_away: dict[str, object] = {"verbose": self.verbose}
 
         if eval_df is not None:
+            self._validate_required_columns(
+                eval_df,
+                [
+                    *self.features_home,
+                    *self.features_away,
+                    self.target_home_col,
+                    self.target_away_col,
+                ],
+                where="eval_df in XGBoostPoissonModel.fit()",
+            )
+
             X_val_home = eval_df[self.features_home]
             X_val_away = eval_df[self.features_away]
             y_val_home = eval_df[self.target_home_col]
@@ -187,6 +242,12 @@ class XGBoostPoissonModel(TrainablePredictiveModel):
         df:
             DataFrame containing the feature columns used during training.
         """
+        self._validate_required_columns(
+            df,
+            [*self.features_home, *self.features_away],
+            where="df in XGBoostPoissonModel.predict()",
+        )
+
         X_test_home = df[self.features_home]
         X_test_away = df[self.features_away]
 
