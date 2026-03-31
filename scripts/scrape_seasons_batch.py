@@ -6,10 +6,11 @@ import os
 
 # --- KONFIGURACJA ---
 SEASONS_TO_SCRAPE = [
-    "2023-2024",
-    "2022-2023",
-    "2021-2022",
-    "2020-2021",
+    # "2023-2024",
+    # "2022-2023",
+    # "2021-2022",
+    # "2020-2021",
+    "current"
 ]
 LEAGUE = "poland-1-liga"
 MARKETS = "1x2,btts,over_under_2_5"
@@ -25,7 +26,7 @@ SCRAPER_DIR = BASE_DIR / "OddsHarvester"
 SCRAPER_PYTHON = SCRAPER_DIR / ".venv" / "Scripts" / "python.exe"
 
 # prefix nazwy pliku na nazwę ligii
-LEAGUE_PREFIX = "1liga_"
+LEAGUE_PREFIX = "1liga300326current_"
 
 # --------------------
 

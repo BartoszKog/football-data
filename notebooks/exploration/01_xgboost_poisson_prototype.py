@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.20.4"
+__generated_with = "0.21.1"
 app = marimo.App(width="medium")
 
 
@@ -14,9 +14,6 @@ def _():
     from sklearn.model_selection import train_test_split
 
     import numpy as np
-    from scipy.interpolate import interp1d
-    from scipy.stats import poisson
-
     import matplotlib.pyplot as plt
     import seaborn as sns
 
@@ -29,7 +26,10 @@ def _():
     sys.path.append(os.path.abspath('.')) 
 
     from src.data import load_and_add_odds_columns_compact
-    from src.features import add_power_implied_probabilities_standard_markets
+    from src.features import (
+        add_baseline_poisson_lambdas,
+        add_power_implied_probabilities_standard_markets,
+    )
 
     from src.models.components.matrix_builders import PoissonMatrixBuilder
     from src.models.components.optimizers import ExpectedPointsOptimizer, ExpectedPointsRule
@@ -43,15 +43,13 @@ def _():
         ExpectedPointsOptimizer,
         ExpectedPointsRule,
         PoissonMatrixBuilder,
+        add_baseline_poisson_lambdas,
         add_power_implied_probabilities_standard_markets,
         evaluate_score_predictions,
-        interp1d,
         load_and_add_odds_columns_compact,
         mo,
-        np,
         pd,
         plot_predictions_summary,
-        poisson,
         score_single_prediction,
         xgb,
     )
@@ -135,37 +133,22 @@ def _(mo):
 
 
 @app.cell
-def _(df, interp1d, np, poisson):
-    # 1. Szybka wektorowa interpolacja (zamiast powolnego brentq)
-    _lambda_grid = np.linspace(0.01, 20.0, 10000)
-    _prob_grid = 1.0 - poisson.cdf(2, _lambda_grid)
-    _lambda_interp = interp1d(_prob_grid, _lambda_grid, kind='linear', fill_value="extrapolate", assume_sorted=True)
-
-    def _get_baseline_lambdas(prob_home, prob_away, prob_over25, bias=1.035):
-        """Zwraca (lambda_home, lambda_away) naśladując Twój stary, najlepszy model."""
-        prob_over25_clipped = np.clip(prob_over25, 1e-6, 1 - 1e-6)
-        total_lambda = float(_lambda_interp(prob_over25_clipped)) * bias
-        share_home = prob_home / (prob_home + prob_away)
-        return total_lambda * share_home, total_lambda * (1.0 - share_home)
-
-    # Wyliczamy lambdy dla całego zbioru!
-    _lambdas = df.apply(
-        lambda row: _get_baseline_lambdas(
-            row['prob_trimmed_avg_1'],
-            row['prob_trimmed_avg_2'],
-            row['prob_trimmed_avg_over_25']
-        ), axis=1
+def _(add_baseline_poisson_lambdas, df):
+    df_lam = add_baseline_poisson_lambdas(
+        df,
+        prob_home_col="prob_trimmed_avg_1",
+        prob_away_col="prob_trimmed_avg_2",
+        prob_over25_col="prob_trimmed_avg_over_25",
+        bias_correction=1.035,
     )
-    df['baseline_lambda_home'] = [x[0] for x in _lambdas]
-    df['baseline_lambda_away'] = [x[1] for x in _lambdas]
 
     # 2. Cechy Marży i Szukania Value
-    df['value_1'] = df['prob_max_1'] - df['prob_trimmed_avg_1']
-    df['value_X'] = df['prob_max_X'] - df['prob_trimmed_avg_X']
-    df['value_2'] = df['prob_max_2'] - df['prob_trimmed_avg_2']
-    df['value_over25'] = df['prob_max_over_25'] - df['prob_trimmed_avg_over_25']
-    df['margin_avg'] = df['prob_trimmed_avg_1'] + df['prob_trimmed_avg_X'] + df['prob_trimmed_avg_2'] - 1.0
-    return
+    df_lam['value_1'] = df_lam['prob_max_1'] - df_lam['prob_trimmed_avg_1']
+    df_lam['value_X'] = df_lam['prob_max_X'] - df_lam['prob_trimmed_avg_X']
+    df_lam['value_2'] = df_lam['prob_max_2'] - df_lam['prob_trimmed_avg_2']
+    df_lam['value_over25'] = df_lam['prob_max_over_25'] - df_lam['prob_trimmed_avg_over_25']
+    df_lam['margin_avg'] = df_lam['prob_trimmed_avg_1'] + df_lam['prob_trimmed_avg_X'] + df_lam['prob_trimmed_avg_2'] - 1.0
+    return (df_lam,)
 
 
 @app.cell(hide_code=True)
@@ -180,14 +163,14 @@ def _(mo):
 
 
 @app.cell
-def _(df, pd):
+def _(df_lam, pd):
     # --- CECHY OGÓLNEJ FORMY (Ostatnie 3 mecze bez podziału na Dom/Wyjazd) ---
 
     # 1. Tworzymy tymczasową tabelę ze wszystkimi występami (format długi)
-    _home_df = df[['match_date', 'home_team', 'home_score', 'away_score']].rename(
+    _home_df = df_lam[['match_date', 'home_team', 'home_score', 'away_score']].rename(
         columns={'home_team': 'team', 'home_score': 'scored', 'away_score': 'conceded'}
     )
-    _away_df = df[['match_date', 'away_team', 'away_score', 'home_score']].rename(
+    _away_df = df_lam[['match_date', 'away_team', 'away_score', 'home_score']].rename(
         columns={'away_team': 'team', 'away_score': 'scored', 'home_score': 'conceded'}
     )
 
@@ -202,7 +185,7 @@ def _(df, pd):
     )
 
     # 3. Przypinamy wyliczone cechy z powrotem do gospodarzy w głównym DataFrame
-    df_form = df.merge(
+    df_form = df_lam.merge(
         _df_long[['match_date', 'team', 'overall_scored_roll3', 'overall_conceded_roll3']],
         left_on=['match_date', 'home_team'],
         right_on=['match_date', 'team'],
@@ -319,7 +302,6 @@ def _(df_form):
             'prob_trimmed_avg_2',
             'prob_trimmed_avg_over_25', 
             'prob_trimmed_avg_btts_yes',
-            'margin_avg',
 
             # 3. Szukanie okazji (Value / Różnice względem MAX)
             'value_1', 

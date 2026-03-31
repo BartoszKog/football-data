@@ -6,15 +6,15 @@ from typing import List
 # 1. Wklej tutaj linki do nadchodzących meczów, które chcesz pobrać (w cudzysłowach, oddzielone przecinkami)
 MATCH_LINKS: List[str] = [
     # "https://www.oddsportal.com/football/poland/ekstraklasa/rakow-czestochowa-lech-poznan-W4aM1b23/",
-    "https://www.oddsportal.com/football/poland/division-1/chrobry-glogow-puszcza-M5HOknmp/",
-    "https://www.oddsportal.com/football/poland/division-1/wisla-legnica-8t276gkL/",
-    "https://www.oddsportal.com/football/poland/division-1/pogon-grodzisk-mazowiecki-polonia-warszawa-IimPgG5F/",
-    "https://www.oddsportal.com/football/poland/division-1/ruch-chorzow-stal-mielec-p2X3nYck/",
-    "https://www.oddsportal.com/football/poland/division-1/s-rzeszow-leczna-6HLCpCS1/",
-    "https://www.oddsportal.com/football/poland/division-1/pogon-siedlce-pruszkow-EJtYifzS/",
-    "https://www.oddsportal.com/football/poland/division-1/tychy-slask-wroclaw-UVKWmQHd/",
-    "https://www.oddsportal.com/football/poland/division-1/lks-lodz-odra-opole-pvkHexy3/",
-    "https://www.oddsportal.com/football/poland/division-1/ks-wieczysta-krakow-polonia-bytom-CE8b8FK8/"
+    "https://www.oddsportal.com/football/poland/division-1/pruszkow-s-rzeszow-KESFXVmK/",
+    "https://www.oddsportal.com/football/poland/division-1/leczna-pogon-grodzisk-mazowiecki-4Cmw1XCr/",
+    "https://www.oddsportal.com/football/poland/division-1/odra-opole-wisla-hnagckC7/",
+    "https://www.oddsportal.com/football/poland/division-1/lks-lodz-ruch-chorzow-0vsnaBse/",
+    "https://www.oddsportal.com/football/poland/division-1/polonia-warszawa-legnica-0hMKDAdl/",
+    "https://www.oddsportal.com/football/poland/division-1/puszcza-slask-wroclaw-Y5KSBlR0/",
+    "https://www.oddsportal.com/football/poland/division-1/polonia-bytom-tychy-t8ulJWYQ/",
+    "https://www.oddsportal.com/football/poland/division-1/stal-mielec-ks-wieczysta-krakow-h8zU9SeD/",
+    "https://www.oddsportal.com/football/poland/division-1/pogon-siedlce-chrobry-glogow-YsxtLh4E/"
 ]
 
 # 2. Jeśli NIE podajesz linków, możesz pobrać mecze po dacie (lub kilku datach) + lidze
@@ -29,7 +29,7 @@ LEAGUE = "poland-1-liga"
 MARKETS = "1x2,btts,over_under_2_5"
 
 # 4. Prefiks nazwy pliku wyjściowego (np. dla ligi 1. ligi)
-LEAGUE_PREFIX = "1ligaUpcoming_"
+LEAGUE_PREFIX = "1ligaUpcoming26_"
 
 # --- USTAWIENIA ŚCIEŻEK ---
 BASE_DIR = Path(__file__).resolve().parent.parent  # Folder football-data/
