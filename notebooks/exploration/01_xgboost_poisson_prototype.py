@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.21.1"
+__generated_with = "0.22.0"
 app = marimo.App(width="medium")
 
 
@@ -20,10 +20,8 @@ def _():
     # Ustawiamy ziarno losowe dla powtarzalności eksperymentu
     np.random.seed(42)
 
-    # Importy Twoich modułów (upewnij się, że notatnik "widzi" katalog src)
     import sys
     import os
-    sys.path.append(os.path.abspath('.')) 
 
     from src.data import load_and_add_odds_columns_compact
     from src.features import (
@@ -307,7 +305,7 @@ def _(df_form):
             'value_1', 
             'value_X', 
             'value_2', 
-            'value_over25',
+            # 'value_over25',
 
             # # --- CECHY FORMY ---
             # 'home_overall_scored_roll3',

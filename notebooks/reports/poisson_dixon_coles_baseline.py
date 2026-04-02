@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.19.10"
+__generated_with = "0.22.0"
 app = marimo.App(width="medium")
 
 
@@ -85,9 +85,6 @@ def _(mo):
 def _():
     import sys
     import os
-
-    # Dodaj katalog nadrzędny do ścieżki
-    sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '.')))
 
     import marimo as mo
 

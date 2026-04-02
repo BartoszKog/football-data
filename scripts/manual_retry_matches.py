@@ -5,11 +5,11 @@ import sys
 
 # --- KONFIGURACJA ---
 # 1. Wpisz sezon, do którego mają trafić mecze
-SEASON = "current"
+SEASON = "2023-2024"
 
 # 2. Wklej tutaj linki do meczów, które chcesz pobrać ręcznie (w cudzysłowach, oddzielone przecinkami)
 MANUAL_URLS = [
-    "https://www.oddsportal.com/football/poland/division-1/slask-wroclaw-legnica-UVGFwu4c/"
+    "https://www.oddsportal.com/football/poland/division-1-2023-2024/chrobry-glogow-polonia-warszawa-AaoWoFc2/"
     #"https://www.oddsportal.com/football/poland/ekstraklasa/rakow-czestochowa-lech-poznan-W4aM1b23/",
     # "https://www.oddsportal.com/kolejny-mecz...",
 ]
@@ -27,7 +27,7 @@ SCRAPER_DIR = BASE_DIR / "OddsHarvester"
 SCRAPER_PYTHON = SCRAPER_DIR / ".venv" / "Scripts" / "python.exe"
 
 # prefix nazwy pliku na nazwę ligii
-LEAGUE_PREFIX = "1liga300326current_"
+LEAGUE_PREFIX = "1liga_"
 
 # --------------------
 
