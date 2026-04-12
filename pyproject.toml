@@ -12,6 +12,7 @@ dependencies = [
     "marimo[mcp]>=0.22.0",
     "matplotlib>=3.9.4",
     "pandas>=2.3.3",
+    "pygam>=0.9.0",
     "scipy>=1.17.0",
     "seaborn>=0.13.2",
     "soccerdata>=1.8.8",
