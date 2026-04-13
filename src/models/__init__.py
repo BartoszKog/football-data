@@ -9,6 +9,8 @@ Public API:
 - score_single_prediction
 - compute_points_per_match
 - evaluate_score_predictions
+- evaluate_poisson_deviance
+- compare_deviance_paired_ttest
 - PointsSummary1x2
 - summarize_predictions_1x2
 - plot_predictions_summary
@@ -25,7 +27,9 @@ Public API:
 from .evaluation import (
     PointsSummary1x2,
     ScoreRule,
+    compare_deviance_paired_ttest,
     compute_points_per_match,
+    evaluate_poisson_deviance,
     evaluate_score_predictions,
     plot_predictions_summary,
     score_single_prediction,
@@ -54,6 +58,8 @@ __all__ = [
     "score_single_prediction",
     "compute_points_per_match",
     "evaluate_score_predictions",
+    "evaluate_poisson_deviance",
+    "compare_deviance_paired_ttest",
     "PointsSummary1x2",
     "summarize_predictions_1x2",
     "plot_predictions_summary",

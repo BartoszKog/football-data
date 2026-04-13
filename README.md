@@ -132,12 +132,26 @@ df = add_baseline_poisson_lambdas(
 )
 ```
 
+Skalibrowane lambdy Poissona (`calibrated_lambda_home`,
+`calibrated_lambda_away`) z korekcja eksponencjalna `exp(B0 + B1 * baseline_lambda)`:
+
+```python
+from src.features import add_calibrated_poisson_lambdas
+
+df = add_calibrated_poisson_lambdas(
+    df,
+    # domyslne B0, B1 z 02_GAM_Lab (PoissonGAM l(0), bias_correction=1.0)
+    # intercept=-0.354611,
+    # slope=0.443665,
+)
+```
+
 Przyklad pelnego pipeline:
 
 ```python
 from src.features import (
     add_power_implied_probabilities_standard_markets,
-    add_baseline_poisson_lambdas,
+    add_calibrated_poisson_lambdas,
 )
 
 df = (
@@ -147,12 +161,7 @@ df = (
         odds_prefix="trimmed_avg",
         output_prefix="prob_trimmed_avg",
     )
-    .pipe(
-        add_baseline_poisson_lambdas,
-        prob_home_col="prob_trimmed_avg_1",
-        prob_away_col="prob_trimmed_avg_2",
-        prob_over25_col="prob_trimmed_avg_over_25",
-    )
+    .pipe(add_calibrated_poisson_lambdas)
 )
 ```
 
@@ -169,6 +178,7 @@ Aktualnie dostepne:
 - `PoissonDixonColesModel` (`src/models/statistical`) - predykcja scoreline z korekta Dixon-Colesa,
 - `XGBoostPoissonModel` (`src/models/ml`) - para regresorów XGBoost Poisson (home/away) + optymalizacja scoreline,
 - `ScoreRule`, `score_single_prediction`, `compute_points_per_match`, `evaluate_score_predictions` (`src/models/evaluation`) - uniwersalna punktacja i metryki.
+- `evaluate_poisson_deviance`, `compare_deviance_paired_ttest` (`src/models/evaluation`) - Poisson deviance (home/away/mean + SE) i sparowany t-test na wektorach deviance.
 - `plot_predictions_summary`, `summarize_predictions_1x2`, `PointsSummary1x2` (`src/models/evaluation`) - wizualizacja ewaluacji (rozkład punktów, macierz 1x2).
 
 Przykład uzycia:
@@ -193,6 +203,34 @@ metrics = evaluate_score_predictions(
     actual_home_col="home_score",
     actual_away_col="away_score",
 )
+```
+
+Ewaluacja Poisson deviance na predykcjach lambd (home/away):
+
+```python
+from src.models import evaluate_poisson_deviance
+
+metrics = evaluate_poisson_deviance(
+    y_true_home=df_val["home_score"].to_numpy(),
+    y_pred_home=df_val["calibrated_lambda_home"].to_numpy(),
+    y_true_away=df_val["away_score"].to_numpy(),
+    y_pred_away=df_val["calibrated_lambda_away"].to_numpy(),
+)
+# metrics["Deviance_mean"], metrics["SE_mean"], metrics["Error_Vector"], ...
+```
+
+Porownanie dwoch modeli sparowanym t-testem na wektorach deviance:
+
+```python
+from src.models import compare_deviance_paired_ttest
+
+result = compare_deviance_paired_ttest(
+    current_vector=metrics_new["Error_Vector"],
+    best_vector=metrics_baseline["Error_Vector"],
+    alpha=0.05,
+)
+# result["comparison_status"]: "better_significant" / "better_not_significant" / "worse"
+# result["pvalue"], result["mean_current"], result["mean_best"]
 ```
 
 Wizualizacja predykcji (rozkład punktów, macierz 1x2, suma i średnia punktów):

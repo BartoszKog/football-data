@@ -15,8 +15,6 @@ with app.setup:
 
     import matplotlib.pyplot as plt
 
-    import scipy.stats
-
     import json
     import os
 
@@ -25,6 +23,7 @@ with app.setup:
         add_baseline_poisson_lambdas,
         add_power_implied_probabilities_standard_markets,
     )
+    from src.models import evaluate_poisson_deviance, compare_deviance_paired_ttest
 
 
 @app.cell(hide_code=True)
@@ -494,120 +493,12 @@ def _():
     return
 
 
-@app.function
-def evaluate_predictions(y_true_home, y_pred_home, y_true_away, y_pred_away):
-    """Compute per-match Poisson deviance for home and away predictions.
-
-    Returns means, standard errors of the mean (``SE = std(..., ddof=1) / sqrt(N)``),
-    and ``Error_Vector``: Python list ``[dev_home for each match, then dev_away for each match]``.
-    """
-
-    def _poisson_deviance_per_sample(y_true, y_pred) -> np.ndarray:
-        """Per-observation Poisson deviance (same aggregation as sklearn mean_poisson_deviance)."""
-        y_true = np.asarray(y_true, dtype=np.float64).ravel()
-        y_pred = np.maximum(np.asarray(y_pred, dtype=np.float64).ravel(), 1e-15)
-
-        # Oszukujemy logarytm: tam gdzie y_true to 0, sztucznie podmieniamy na 1.0 (tylko do logarytmu)
-        safe_y_true = np.where(y_true > 0, y_true, 1.0)
-
-        # Teraz liczymy term1 używając safe_y_true. 
-        # NumPy nie zobaczy log(0), a np.where i tak wyzeruje te miejsca.
-        term1 = np.where(y_true > 0, y_true * np.log(safe_y_true / y_pred), 0.0)
-        term2 = y_true - y_pred
-        return 2.0 * (term1 - term2)
-
-    dev_home = _poisson_deviance_per_sample(y_true_home, y_pred_home)
-    dev_away = _poisson_deviance_per_sample(y_true_away, y_pred_away)
-    n = int(dev_home.shape[0])
-    if n == 0:
-        raise ValueError("evaluate_predictions requires at least one match.")
-    se_home = float(np.std(dev_home, ddof=1) / np.sqrt(n))
-    se_away = float(np.std(dev_away, ddof=1) / np.sqrt(n))
-    per_match_mean = (dev_home + dev_away) / 2.0
-    se_mean = float(np.std(per_match_mean, ddof=1) / np.sqrt(n))
-    err_vec = np.concatenate([dev_home, dev_away])
-    return {
-        "Deviance_home": round(float(np.mean(dev_home)), 4),
-        "SE_home": round(se_home, 4),
-        "Deviance_away": round(float(np.mean(dev_away)), 4),
-        "SE_away": round(se_away, 4),
-        "Deviance_mean": round(float(np.mean(per_match_mean)), 4),
-        "SE_mean": round(se_mean, 4),
-        "Error_Vector": err_vec.tolist(),
-    }
-
-
-@app.function
-def compare_models_statistically(current_vector, best_vector, alpha=0.05):
-    """Paired t-test on per-observation deviances (current vs best).
-
-    Lower mean deviance is better. Returns ``comparison_status`` without emojis:
-    ``better_significant``, ``better_not_significant``, ``worse``, or ``error``.
-    """
-    a = np.asarray(current_vector, dtype=float).ravel()
-    b = np.asarray(best_vector, dtype=float).ravel()
-    if a.shape != b.shape or a.size == 0:
-        return {
-            "statistic": float("nan"),
-            "pvalue": float("nan"),
-            "alpha": alpha,
-            "comparison_status": "error",
-            "mean_current": float("nan"),
-            "mean_best": float("nan"),
-            "message": "Niezgodna długość wektorów lub pusty wektor.",
-        }
-    mean_c = float(np.mean(a))
-    mean_b = float(np.mean(b))
-    better = mean_c < mean_b
-    tt = scipy.stats.ttest_rel(a, b)
-    pval = float(tt.pvalue) if tt.pvalue is not None else float("nan")
-    stat = float(tt.statistic)
-
-    if not better:
-        return {
-            "statistic": stat,
-            "pvalue": pval,
-            "alpha": alpha,
-            "comparison_status": "worse",
-            "mean_current": mean_c,
-            "mean_best": mean_b,
-            "message": (
-                "Bieżący model nie ma niższej średniej odchyleniowej Poissona "
-                "niż najlepszy zapis w historii."
-            ),
-        }
-    if pval < alpha:
-        return {
-            "statistic": stat,
-            "pvalue": pval,
-            "alpha": alpha,
-            "comparison_status": "better_significant",
-            "mean_current": mean_c,
-            "mean_best": mean_b,
-            "message": (
-                "Bieżący model jest istotnie lepszy (p < α) od najlepszego zapisu w historii."
-            ),
-        }
-    return {
-        "statistic": stat,
-        "pvalue": pval,
-        "alpha": alpha,
-        "comparison_status": "better_not_significant",
-        "mean_current": mean_c,
-        "mean_best": mean_b,
-        "message": (
-            "Średnia odchyleniowa jest niższa niż u najlepszego zapisu, "
-            "ale różnica nie jest istotna statystycznie przy tym teście."
-        ),
-    }
-
-
 @app.cell
 def _(bundle, model_away, model_home, model_long):
     if bundle["mode"] == "two_models":
         _y_pred_home = model_home.predict(bundle["X_val_home"])
         _y_pred_away = model_away.predict(bundle["X_val_away"])
-        eval_metrics = evaluate_predictions(
+        eval_metrics = evaluate_poisson_deviance(
             bundle["y_home_val"].to_numpy(),
             _y_pred_home,
             bundle["y_away_val"].to_numpy(),
@@ -623,7 +514,7 @@ def _(bundle, model_away, model_home, model_long):
             columns={"score": "y_away", "pred": "pred_away"}
         )
         _eval_df = _h.merge(_a, on="match_id", how="inner")
-        eval_metrics = evaluate_predictions(
+        eval_metrics = evaluate_poisson_deviance(
             _eval_df["y_home"].to_numpy(),
             _eval_df["pred_home"].to_numpy(),
             _eval_df["y_away"].to_numpy(),
@@ -857,7 +748,7 @@ def _(eval_metrics):
         mo.md("**Niepoprawny format Error_Vector w historii.**")
     )
 
-    _result = compare_models_statistically(
+    _result = compare_deviance_paired_ttest(
         eval_metrics["Error_Vector"],
         _best_vec,
         alpha=0.05,

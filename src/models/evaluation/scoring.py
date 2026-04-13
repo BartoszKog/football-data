@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.stats import ttest_rel
 
 
 @dataclass(frozen=True)
@@ -213,4 +214,149 @@ def evaluate_score_predictions(
         "goal_diff_hit_rate": float(goal_diff_mask.mean()),
         "outcome_hit_rate": float(outcome_mask.mean()),
         "miss_rate": float(miss_mask.mean()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Poisson-deviance evaluation
+# ---------------------------------------------------------------------------
+
+
+def _poisson_deviance_per_sample(
+    y_true: np.ndarray, y_pred: np.ndarray
+) -> np.ndarray:
+    """Per-observation Poisson deviance (same formula as sklearn ``mean_poisson_deviance``)."""
+    y_true = np.asarray(y_true, dtype=np.float64).ravel()
+    y_pred = np.maximum(np.asarray(y_pred, dtype=np.float64).ravel(), 1e-15)
+    safe_y_true = np.where(y_true > 0, y_true, 1.0)
+    term1 = np.where(y_true > 0, y_true * np.log(safe_y_true / y_pred), 0.0)
+    term2 = y_true - y_pred
+    return 2.0 * (term1 - term2)
+
+
+def evaluate_poisson_deviance(
+    y_true_home: np.ndarray,
+    y_pred_home: np.ndarray,
+    y_true_away: np.ndarray,
+    y_pred_away: np.ndarray,
+) -> dict[str, Any]:
+    """Compute per-match Poisson deviance for home and away goal predictions.
+
+    Parameters
+    ----------
+    y_true_home, y_true_away:
+        Observed goal counts (one element per match).
+    y_pred_home, y_pred_away:
+        Predicted expected goals / Poisson lambda (one element per match).
+
+    Returns
+    -------
+    dict[str, Any]
+        ``Deviance_home``, ``SE_home``, ``Deviance_away``, ``SE_away``,
+        ``Deviance_mean``, ``SE_mean`` (rounded to 4 d.p.) and
+        ``Error_Vector`` (Python list: per-match home deviances followed by
+        away deviances -- usable with :func:`compare_deviance_paired_ttest`).
+    """
+    dev_home = _poisson_deviance_per_sample(y_true_home, y_pred_home)
+    dev_away = _poisson_deviance_per_sample(y_true_away, y_pred_away)
+    n = int(dev_home.shape[0])
+    if n == 0:
+        raise ValueError("evaluate_poisson_deviance requires at least one match.")
+    se_home = float(np.std(dev_home, ddof=1) / np.sqrt(n))
+    se_away = float(np.std(dev_away, ddof=1) / np.sqrt(n))
+    per_match_mean = (dev_home + dev_away) / 2.0
+    se_mean = float(np.std(per_match_mean, ddof=1) / np.sqrt(n))
+    err_vec = np.concatenate([dev_home, dev_away])
+    return {
+        "Deviance_home": round(float(np.mean(dev_home)), 4),
+        "SE_home": round(se_home, 4),
+        "Deviance_away": round(float(np.mean(dev_away)), 4),
+        "SE_away": round(se_away, 4),
+        "Deviance_mean": round(float(np.mean(per_match_mean)), 4),
+        "SE_mean": round(se_mean, 4),
+        "Error_Vector": err_vec.tolist(),
+    }
+
+
+def compare_deviance_paired_ttest(
+    current_vector: list[float] | np.ndarray,
+    best_vector: list[float] | np.ndarray,
+    alpha: float = 0.05,
+) -> dict[str, Any]:
+    """Paired t-test on per-observation deviance vectors (current vs best).
+
+    Lower mean deviance is better.
+
+    Parameters
+    ----------
+    current_vector, best_vector:
+        Flat deviance vectors (typically ``Error_Vector`` from
+        :func:`evaluate_poisson_deviance`).
+    alpha:
+        Significance level for the two-sided test.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``statistic``, ``pvalue``, ``alpha``, ``comparison_status``
+        (one of ``"better_significant"``, ``"better_not_significant"``,
+        ``"worse"``, ``"error"``), ``mean_current``, ``mean_best``,
+        ``message``.
+    """
+    a = np.asarray(current_vector, dtype=float).ravel()
+    b = np.asarray(best_vector, dtype=float).ravel()
+    if a.shape != b.shape or a.size == 0:
+        return {
+            "statistic": float("nan"),
+            "pvalue": float("nan"),
+            "alpha": alpha,
+            "comparison_status": "error",
+            "mean_current": float("nan"),
+            "mean_best": float("nan"),
+            "message": "Incompatible vector lengths or empty vector.",
+        }
+    mean_c = float(np.mean(a))
+    mean_b = float(np.mean(b))
+    better = mean_c < mean_b
+    tt = ttest_rel(a, b)
+    pval = float(tt.pvalue) if tt.pvalue is not None else float("nan")
+    stat = float(tt.statistic)
+
+    if not better:
+        return {
+            "statistic": stat,
+            "pvalue": pval,
+            "alpha": alpha,
+            "comparison_status": "worse",
+            "mean_current": mean_c,
+            "mean_best": mean_b,
+            "message": (
+                "Current model does not have lower mean Poisson deviance "
+                "than the best historical record."
+            ),
+        }
+    if pval < alpha:
+        return {
+            "statistic": stat,
+            "pvalue": pval,
+            "alpha": alpha,
+            "comparison_status": "better_significant",
+            "mean_current": mean_c,
+            "mean_best": mean_b,
+            "message": (
+                "Current model is significantly better (p < alpha) than "
+                "the best historical record."
+            ),
+        }
+    return {
+        "statistic": stat,
+        "pvalue": pval,
+        "alpha": alpha,
+        "comparison_status": "better_not_significant",
+        "mean_current": mean_c,
+        "mean_best": mean_b,
+        "message": (
+            "Mean deviance is lower than the best historical record, "
+            "but the difference is not statistically significant."
+        ),
     }
