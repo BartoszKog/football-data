@@ -1,10 +1,15 @@
-"""Probability matrix builders used by score prediction models."""
+"""Probability matrix builders and rho calibration for Dixon-Coles models."""
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
 
 import numpy as np
+import pandas as pd
 from scipy.stats import poisson
 
 
@@ -80,3 +85,155 @@ class PoissonMatrixBuilder(ProbabilityMatrixBuilder):
         if matrix_sum <= 0:
             raise ValueError("probability matrix sum is not positive.")
         return matrix / matrix_sum
+
+
+# ---------------------------------------------------------------------------
+# Rho calibration
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class RhoCalibrationResult:
+    """Container returned by :func:`calibrate_rho`."""
+
+    best_rho: float
+    best_nll: float
+    n_matches: int
+    grid_df: pd.DataFrame
+
+
+def calibrate_rho(
+    lambda_home: np.ndarray,
+    lambda_away: np.ndarray,
+    actual_home: np.ndarray,
+    actual_away: np.ndarray,
+    *,
+    rho_range: tuple[float, float] = (-0.30, 0.30),
+    rho_step: float = 0.01,
+    max_goals_matrix: int = 10,
+) -> RhoCalibrationResult:
+    """Grid-search optimal Dixon-Coles rho via negative log-likelihood.
+
+    For each candidate rho a :class:`PoissonMatrixBuilder` is constructed and
+    the average NLL of the true scoreline is computed across all matches whose
+    actual goals fall within ``[0, max_goals_matrix]``.
+
+    Parameters
+    ----------
+    lambda_home:
+        Predicted expected goals for the home team (one per match).
+    lambda_away:
+        Predicted expected goals for the away team (one per match).
+    actual_home:
+        Observed home goals (one per match).
+    actual_away:
+        Observed away goals (one per match).
+    rho_range:
+        ``(lo, hi)`` bounds for the rho grid (both inclusive).
+    rho_step:
+        Step size between consecutive rho candidates.
+    max_goals_matrix:
+        Maximum goals per team in the probability matrix.
+
+    Returns
+    -------
+    RhoCalibrationResult
+        Best rho, its NLL, match count, and full grid DataFrame.
+    """
+    lam_h = np.asarray(lambda_home, dtype=np.float64)
+    lam_a = np.asarray(lambda_away, dtype=np.float64)
+    real_h = np.asarray(actual_home, dtype=np.intp)
+    real_a = np.asarray(actual_away, dtype=np.intp)
+
+    if not (lam_h.shape == lam_a.shape == real_h.shape == real_a.shape):
+        raise ValueError("All input arrays must have the same shape.")
+
+    mask = (real_h >= 0) & (real_h <= max_goals_matrix) & \
+           (real_a >= 0) & (real_a <= max_goals_matrix)
+    lam_h = lam_h[mask]
+    lam_a = lam_a[mask]
+    real_h = real_h[mask]
+    real_a = real_a[mask]
+    n_valid = int(mask.sum())
+
+    if n_valid == 0:
+        raise ValueError("No valid matches after filtering by max_goals_matrix.")
+
+    rho_grid = np.arange(rho_range[0], rho_range[1] + rho_step * 0.5, rho_step)
+    rows: list[dict[str, float]] = []
+
+    for rho_val in rho_grid:
+        builder = PoissonMatrixBuilder(rho=float(rho_val), max_goals_matrix=max_goals_matrix)
+        nll_sum = 0.0
+        for i in range(n_valid):
+            try:
+                matrix = builder.build_matrix(float(lam_h[i]), float(lam_a[i]))
+            except ValueError:
+                continue
+            prob = max(float(matrix[real_h[i], real_a[i]]), 1e-15)
+            nll_sum += -np.log(prob)
+        rows.append({"rho": round(float(rho_val), 4), "avg_nll": nll_sum / n_valid})
+
+    grid_df = pd.DataFrame(rows)
+    best_idx = int(grid_df["avg_nll"].idxmin())
+    return RhoCalibrationResult(
+        best_rho=float(grid_df.loc[best_idx, "rho"]),
+        best_nll=float(grid_df.loc[best_idx, "avg_nll"]),
+        n_matches=n_valid,
+        grid_df=grid_df,
+    )
+
+
+def plot_rho_calibration(
+    result: RhoCalibrationResult,
+    *,
+    ax: Axes | None = None,
+) -> Axes:
+    """Plot rho grid-search curve with best-point annotation.
+
+    Parameters
+    ----------
+    result:
+        Output of :func:`calibrate_rho`.
+    ax:
+        Matplotlib axes to draw on.  When ``None`` a new figure is created.
+
+    Returns
+    -------
+    plt.Axes
+        The axes with the plot (caller can further customize title, etc.).
+    """
+    import matplotlib.pyplot as plt
+
+    df = result.grid_df
+    nll_min = df["avg_nll"].min()
+    nll_max = df["avg_nll"].max()
+    nll_range = nll_max - nll_min
+    pad = nll_range * 0.15
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(7, 4))
+
+    ax.plot(df["rho"], df["avg_nll"], color="C0", linewidth=1.5, label="Avg NLL")
+    ax.axvline(
+        x=result.best_rho, color="C3", linestyle="--", linewidth=0.8,
+        alpha=0.6, label=f"best \u03c1 = {result.best_rho:.2f}",
+    )
+    ax.scatter([result.best_rho], [result.best_nll], s=40, color="C3", zorder=5)
+    ax.set_ylim(nll_min - pad, nll_max + pad)
+
+    ax.annotate(
+        f"\u03c1 = {result.best_rho:.2f}, NLL = {result.best_nll:.5f}",
+        xy=(result.best_rho, result.best_nll),
+        xytext=(result.best_rho + 0.01, result.best_nll + nll_range * 0.30),
+        fontsize=8, color="C3",
+    )
+
+    ax.set_xlabel("\u03c1 (rho)")
+    ax.set_ylabel("Average Negative Log-Likelihood")
+    ax.set_title(
+        f"Dixon-Coles \u03c1 Grid Search (N={result.n_matches})",
+    )
+    ax.legend(loc="best", fontsize=8)
+    ax.grid(True, alpha=0.3)
+    ax.figure.tight_layout()
+    return ax

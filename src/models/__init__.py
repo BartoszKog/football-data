@@ -22,6 +22,9 @@ Public API:
 - run_trainable_grid_search
 - plot_grid_search_1d
 - plot_grid_search_2d
+- RhoCalibrationResult
+- calibrate_rho
+- plot_rho_calibration
 """
 
 from .evaluation import (
@@ -35,6 +38,7 @@ from .evaluation import (
     score_single_prediction,
     summarize_predictions_1x2,
 )
+from .components import RhoCalibrationResult, calibrate_rho, plot_rho_calibration
 from .interfaces import PredictiveModel, TrainablePredictiveModel
 from .ml import XGBoostPoissonModel
 from .statistical import PoissonDixonColesModel
@@ -71,4 +75,7 @@ __all__ = [
     "run_trainable_grid_search",
     "plot_grid_search_1d",
     "plot_grid_search_2d",
+    "RhoCalibrationResult",
+    "calibrate_rho",
+    "plot_rho_calibration",
 ]
