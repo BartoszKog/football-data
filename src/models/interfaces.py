@@ -24,15 +24,8 @@ class PredictiveModel(Protocol):
 class TrainablePredictiveModel(PredictiveModel, Protocol):
     """Interface for models that require fitting before prediction.
 
-    Two validation styles are supported by the tuning helpers:
-
-    **2-way (row-based walk-forward):** ``run_trainable_grid_search`` calls
-    ``fit(train_df)`` — i.e. ``fit(train_df, eval_df=None)`` — then
-    ``predict(valid_df)`` on the validation slice of the fold; metrics are
-    computed on that validation slice only.
-
-    **3-way (season-based walk-forward):** ``run_trainable_grid_search_three_way``
-    calls ``fit(train_df, eval_df=val_df)`` so the model can use the val slice
+    Season-based train/val/eval tuning uses ``run_trainable_grid_search_three_way``:
+    it calls ``fit(train_df, eval_df=val_df)`` so the model can use the val slice
     only during training (e.g. early stopping), then ``predict(eval_df)`` on a
     separate eval slice; val must not leak into final fold metrics.
 

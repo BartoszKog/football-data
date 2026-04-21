@@ -5,11 +5,27 @@ import sys
 
 # --- KONFIGURACJA ---
 # 1. Wpisz sezon, do którego mają trafić mecze
-SEASON = "2023-2024"
+SEASON = "current"
 
 # 2. Wklej tutaj linki do meczów, które chcesz pobrać ręcznie (w cudzysłowach, oddzielone przecinkami)
 MANUAL_URLS = [
-    "https://www.oddsportal.com/football/poland/division-1-2023-2024/chrobry-glogow-polonia-warszawa-AaoWoFc2/"
+    "https://www.oddsportal.com/pl/football/h2h/pogon-siedlce-d6IVB42i/slask-wroclaw-E1Oxemse/",
+    "https://www.oddsportal.com/pl/football/h2h/ks-wieczysta-krakow-ImhQf1z6/lks-lodz-ShUKWHDG/",
+    "https://www.oddsportal.com/football/h2h/pruszkow-K8YxVlJK/tychy-baXtU8YQ/",
+    "https://www.oddsportal.com/pl/football/h2h/gornik-leczna-ImAVQStr/wisla-krakow-rob20Q2Q/",
+    "https://www.oddsportal.com/pl/football/h2h/odra-opole-C8Kg1k4R/stal-rzeszow-IkpY1q92/",
+    "https://www.oddsportal.com/pl/football/h2h/polonia-warszawa-ADZjR3us/puszcza-dtqx13O8/",
+    "https://www.oddsportal.com/pl/football/h2h/chrobry-glogow-vo6umLPj/ruch-chorzow-S4zygtuJ/",
+    "https://www.oddsportal.com/pl/football/h2h/pogon-grodzisk-mazowiecki-4nBQsDq2/stal-mielec-pxXiDZkQ/",
+    "https://www.oddsportal.com/pl/football/h2h/miedz-legnica-lnY5n2Xe/polonia-bytom-vRn3UqXP/",
+    "https://www.oddsportal.com/pl/football/h2h/polonia-warszawa-ADZjR3us/slask-wroclaw-E1Oxemse/",
+    "https://www.oddsportal.com/pl/football/h2h/odra-opole-C8Kg1k4R/puszcza-dtqx13O8/",
+    "https://www.oddsportal.com/football/h2h/s-rzeszow-IkpY1q92/stal-mielec-pxXiDZkQ/",
+    "https://www.oddsportal.com/pl/football/h2h/ks-wieczysta-krakow-ImhQf1z6/ruch-chorzow-S4zygtuJ/",
+    "https://www.oddsportal.com/pl/football/h2h/chrobry-glogow-vo6umLPj/gornik-leczna-ImAVQStr/",
+    "https://www.oddsportal.com/football/h2h/pogon-siedlce-d6IVB42i/tychy-baXtU8YQ/",
+    "https://www.oddsportal.com/pl/football/h2h/polonia-bytom-vRn3UqXP/wisla-krakow-rob20Q2Q/",
+    "https://www.oddsportal.com/pl/football/h2h/miedz-legnica-lnY5n2Xe/znicz-pruszkow-K8YxVlJK/",
     #"https://www.oddsportal.com/football/poland/ekstraklasa/rakow-czestochowa-lech-poznan-W4aM1b23/",
     # "https://www.oddsportal.com/kolejny-mecz...",
 ]
@@ -27,7 +43,7 @@ SCRAPER_DIR = BASE_DIR / "OddsHarvester"
 SCRAPER_PYTHON = SCRAPER_DIR / ".venv" / "Scripts" / "python.exe"
 
 # prefix nazwy pliku na nazwę ligii
-LEAGUE_PREFIX = "1liga_"
+LEAGUE_PREFIX = "1liga300326current_"
 
 # --------------------
 

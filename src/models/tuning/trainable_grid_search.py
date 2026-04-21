@@ -21,236 +21,7 @@ from .grid_search import (
     _validate_param_grid,
     _write_cache_result,
 )
-from .time_splits import SeasonWalkForwardFold, make_walk_forward_splits
-
-
-def run_trainable_grid_search(
-    *,
-    model_factory: Callable[..., TrainablePredictiveModel],
-    param_grid: Mapping[str, Sequence[Any]],
-    df: pd.DataFrame,
-    datetime_col: str = "match_date",
-    n_splits: int,
-    min_train_size: int,
-    valid_size: int,
-    pred_home_col: str = "pred_home_goals",
-    pred_away_col: str = "pred_away_goals",
-    actual_home_col: str = "home_score",
-    actual_away_col: str = "away_score",
-    score_key: str = "avg_points",
-    metric_fn: Callable[[dict[str, Any]], float] | None = None,
-    cache_mode: CacheMode = "off",
-    cache_dir: str = "outputs/reports/grid_search_cache",
-    model_name: str | None = None,
-    data_fingerprint_columns: Sequence[str] | None = None,
-    show_progress: bool = True,
-) -> GridSearchResult:
-    """Run walk-forward grid search for trainable predictive models.
-
-    For each parameter combination and each fold:
-    1. fit on train fold — the implementation is called as ``model.fit(train_df)``
-       (one positional argument), which matches ``fit(train_df, eval_df=None)``;
-       models may ignore ``eval_df`` when not used.
-    2. predict on the validation fold with ``predict(valid_df)`` (metrics are
-       computed on this slice).
-    3. evaluate with ``evaluate_score_predictions``.
-
-    For three-way train/val/eval splits (e.g. season-based with early stopping
-    on val and metrics on eval), use ``run_trainable_grid_search_three_way``
-    instead.
-
-    Parameters
-    ----------
-    model_factory:
-        Callable creating a trainable model from keyword parameters.
-        Returned object must implement ``TrainablePredictiveModel``.
-    param_grid:
-        Hyperparameter grid with exactly 1 or 2 parameter names.
-        Values are iterated as Cartesian product.
-    df:
-        Input DataFrame containing time column, model inputs and actual scores.
-    datetime_col:
-        Time column used for walk-forward splitting. Default: ``"match_date"``.
-        Column is converted with ``pd.to_datetime`` and data is sorted ascending.
-    n_splits:
-        Number of walk-forward validation folds.
-    min_train_size:
-        Minimum number of initial rows in the first training fold.
-    valid_size:
-        Number of rows in each validation fold.
-    pred_home_col, pred_away_col:
-        Column names expected in ``predict(valid_df)`` output.
-    actual_home_col, actual_away_col:
-        Ground-truth score columns in ``df`` used for evaluation.
-    score_key:
-        Metric key used to rank parameter sets when ``metric_fn`` is ``None``.
-        Typical values:
-        - ``"avg_points"`` (default),
-        - ``"total_points"``,
-        - ``"matches_evaluated"``,
-        - ``"exact_hit_rate"``,
-        - ``"goal_diff_hit_rate"``,
-        - ``"outcome_hit_rate"``,
-        - ``"miss_rate"``.
-    metric_fn:
-        Optional custom ranking function taking aggregated fold metrics dict
-        and returning a numeric objective. Overrides ``score_key``.
-    cache_mode:
-        Cache behavior:
-        - ``"off"``: no cache read/write,
-        - ``"use"``: read cache if available, otherwise compute and save,
-        - ``"refresh"``: force recompute and overwrite cache.
-    cache_dir:
-        Directory for JSON cache files.
-    model_name:
-        Optional stable model name used in cache key.
-    data_fingerprint_columns:
-        Optional list of columns used to build cache data fingerprint.
-        If ``None``, defaults to time and evaluation-related columns when available.
-    show_progress:
-        Whether to display a text progress bar with elapsed time and ETA.
-
-    Returns
-    -------
-    GridSearchResult
-        Aggregated grid search results with:
-        - ``results_df`` sorted by ``objective_metric`` descending,
-        - ``best_params``,
-        - ``best_metric``,
-        - ``ranking_metric``,
-        - cache metadata (hit/path).
-    """
-    _validate_param_grid(param_grid)
-    _validate_cache_mode(cache_mode)
-
-    sorted_df = _prepare_sorted_df_for_trainable_grid(df, datetime_col=datetime_col)
-
-    folds = make_walk_forward_splits(
-        sorted_df,
-        datetime_col=datetime_col,
-        n_splits=n_splits,
-        min_train_size=min_train_size,
-        valid_size=valid_size,
-    )
-
-    ranking_metric = "custom_metric" if metric_fn is not None else score_key
-    cache_path = None
-    if cache_mode in {"use", "refresh"}:
-        cache_model_name = _trainable_cache_model_name(
-            model_name=model_name or getattr(model_factory, "__name__", "model_factory"),
-            datetime_col=datetime_col,
-            n_splits=n_splits,
-            min_train_size=min_train_size,
-            valid_size=valid_size,
-        )
-        default_fp_columns = [
-            datetime_col,
-            actual_home_col,
-            actual_away_col,
-            pred_home_col,
-            pred_away_col,
-        ]
-        fp_columns = (
-            list(data_fingerprint_columns)
-            if data_fingerprint_columns is not None
-            else [col for col in default_fp_columns if col in sorted_df.columns]
-        )
-        cache_path = _build_cache_path(
-            cache_dir=cache_dir,
-            model_name=cache_model_name,
-            param_grid=param_grid,
-            score_key=score_key,
-            ranking_metric=ranking_metric,
-            pred_home_col=pred_home_col,
-            pred_away_col=pred_away_col,
-            actual_home_col=actual_home_col,
-            actual_away_col=actual_away_col,
-            df=sorted_df,
-            data_fingerprint_columns=fp_columns,
-        )
-        if cache_mode == "use" and cache_path.exists():
-            return _read_cache_result(cache_path)
-
-    combinations = _parameter_combinations(param_grid)
-    total_steps = len(combinations) * len(folds)
-    completed_steps = 0
-    progress_start = time.perf_counter()
-    if show_progress:
-        _print_progress(
-            description="Trainable grid search",
-            current=0,
-            total=total_steps,
-            started_at=progress_start,
-        )
-
-    rows: list[dict[str, Any]] = []
-    for params in combinations:
-        fold_metrics: list[dict[str, Any]] = []
-        for fold in folds:
-            model = model_factory(**params)
-            if not isinstance(model, TrainablePredictiveModel):
-                raise TypeError(
-                    "model_factory must return an object implementing TrainablePredictiveModel."
-                )
-
-            train_df = sorted_df.iloc[fold.train_indices].copy()
-            valid_df = sorted_df.iloc[fold.valid_indices].copy()
-
-            fitted_model = model.fit(train_df)
-            if not isinstance(fitted_model, PredictiveModel):
-                raise TypeError("fit(...) must return an object implementing PredictiveModel.")
-
-            pred_df = fitted_model.predict(valid_df)
-            metrics = evaluate_score_predictions(
-                pred_df,
-                pred_home_col=pred_home_col,
-                pred_away_col=pred_away_col,
-                actual_home_col=actual_home_col,
-                actual_away_col=actual_away_col,
-            )
-            fold_metrics.append(metrics)
-            completed_steps += 1
-            if show_progress:
-                _print_progress(
-                    description="Trainable grid search",
-                    current=completed_steps,
-                    total=total_steps,
-                    started_at=progress_start,
-                )
-
-        aggregated = _aggregate_fold_metrics(fold_metrics)
-        objective = (
-            float(metric_fn(aggregated))
-            if metric_fn is not None
-            else float(aggregated[score_key])
-        )
-        row = {**params, **aggregated, "objective_metric": objective, "n_folds": len(folds)}
-        rows.append(row)
-
-    results_df = pd.DataFrame(rows)
-    results_df = results_df.sort_values(by="objective_metric", ascending=False).reset_index(
-        drop=True
-    )
-
-    best_row = results_df.iloc[0]
-    best_params = {name: _to_jsonable_scalar(best_row[name]) for name in param_grid.keys()}
-    best_metric = float(best_row["objective_metric"])
-    result = GridSearchResult(
-        results_df=results_df,
-        best_params=best_params,
-        best_metric=best_metric,
-        ranking_metric=ranking_metric,
-        cache_hit=False,
-        cache_path=str(cache_path) if cache_path is not None else None,
-    )
-
-    if cache_path is not None:
-        _write_cache_result(cache_path, result)
-
-    if show_progress:
-        print()
-
-    return result
+from .time_splits import SeasonWalkForwardFold
 
 
 def run_trainable_grid_search_three_way(
@@ -287,9 +58,6 @@ def run_trainable_grid_search_three_way(
        so that the model can use val for early stopping or calibration,
     2. predict on the evaluation slice with ``predict(eval_df)``,
     3. evaluate with ``evaluate_score_predictions``.
-
-    For simpler two-way train/valid splits (without a separate eval slice),
-    use ``run_trainable_grid_search`` instead.
 
     Parameters
     ----------
@@ -508,7 +276,7 @@ def _aggregate_fold_metrics(fold_metrics: list[dict[str, Any]]) -> dict[str, Any
 
 
 def _prepare_sorted_df_for_trainable_grid(df: pd.DataFrame, *, datetime_col: str) -> pd.DataFrame:
-    """Copy df, coerce datetime_col, sort ascending, reset_index. Shared by 2-way and 3-way search."""
+    """Copy df, coerce datetime_col, sort ascending, reset_index."""
     if datetime_col not in df.columns:
         raise ValueError(f"Missing datetime column: '{datetime_col}'.")
     sorted_df = df.copy()
@@ -524,7 +292,7 @@ def _trainable_three_way_cache_model_name(
     datetime_col: str,
     folds: Sequence[SeasonWalkForwardFold],
 ) -> str:
-    """Build a cache key segment unique to three-way season folds (avoids collision with 2-way)."""
+    """Build a cache key segment unique to three-way season folds."""
     n_folds = len(folds)
     min_train = int(min(f.train_indices.size for f in folds))
     min_val = int(min(f.val_indices.size for f in folds))
@@ -534,16 +302,3 @@ def _trainable_three_way_cache_model_name(
         f"__train_min_{min_train}__val_min_{min_val}__eval_min_{min_eval}"
     )
 
-
-def _trainable_cache_model_name(
-    *,
-    model_name: str,
-    datetime_col: str,
-    n_splits: int,
-    min_train_size: int,
-    valid_size: int,
-) -> str:
-    return (
-        f"{model_name}__wf__dt_{datetime_col}__splits_{n_splits}"
-        f"__train_{min_train_size}__valid_{valid_size}"
-    )
