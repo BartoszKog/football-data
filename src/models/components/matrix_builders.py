@@ -91,6 +91,76 @@ class PoissonMatrixBuilder(ProbabilityMatrixBuilder):
 # Rho calibration
 # ---------------------------------------------------------------------------
 
+
+def average_scoreline_nll(
+    lambda_home: np.ndarray,
+    lambda_away: np.ndarray,
+    actual_home: np.ndarray,
+    actual_away: np.ndarray,
+    *,
+    rho: float,
+    max_goals_matrix: int,
+) -> tuple[float, int]:
+    """Average negative log-likelihood of observed scorelines under Dixon-Coles.
+
+    Uses :class:`PoissonMatrixBuilder` with the given ``rho`` to obtain the
+    probability of the realized ``(home, away)`` score in each match.
+    Only rows with observed goals in ``[0, max_goals_matrix]`` participate.
+    Rows where the matrix cannot be built (invalid lambdas) are skipped; the
+    returned average divides by the count of successful evaluations.
+
+    Parameters
+    ----------
+    lambda_home, lambda_away:
+        Expected goals per match (same length).
+    actual_home, actual_away:
+        Observed goals per match.
+    rho:
+        Dixon-Coles low-score correction parameter.
+    max_goals_matrix:
+        Inclusive cap on goals per team in the probability matrix.
+
+    Returns
+    -------
+    tuple[float, int]
+        ``(mean_nll, n_used)`` where ``n_used`` is the number of matches with a
+        valid matrix and log-probability.
+    """
+    lam_h = np.asarray(lambda_home, dtype=np.float64)
+    lam_a = np.asarray(lambda_away, dtype=np.float64)
+    real_h = np.asarray(actual_home, dtype=np.intp)
+    real_a = np.asarray(actual_away, dtype=np.intp)
+
+    if not (lam_h.shape == lam_a.shape == real_h.shape == real_a.shape):
+        raise ValueError("All input arrays must have the same shape.")
+
+    mask = (real_h >= 0) & (real_h <= max_goals_matrix) & (real_a >= 0) & (real_a <= max_goals_matrix)
+    lam_h = lam_h[mask]
+    lam_a = lam_a[mask]
+    real_h = real_h[mask]
+    real_a = real_a[mask]
+    n_masked = int(mask.sum())
+
+    if n_masked == 0:
+        raise ValueError("No valid matches after filtering by max_goals_matrix.")
+
+    builder = PoissonMatrixBuilder(rho=float(rho), max_goals_matrix=max_goals_matrix)
+    nll_sum = 0.0
+    n_used = 0
+    for i in range(n_masked):
+        try:
+            matrix = builder.build_matrix(float(lam_h[i]), float(lam_a[i]))
+        except ValueError:
+            continue
+        prob = max(float(matrix[real_h[i], real_a[i]]), 1e-15)
+        nll_sum += -np.log(prob)
+        n_used += 1
+
+    if n_used == 0:
+        raise ValueError("No match produced a valid probability matrix for NLL.")
+    return (nll_sum / n_used, n_used)
+
+
 @dataclass(frozen=True)
 class RhoCalibrationResult:
     """Container returned by :func:`calibrate_rho`."""
@@ -160,25 +230,23 @@ def calibrate_rho(
 
     rho_grid = np.arange(rho_range[0], rho_range[1] + rho_step * 0.5, rho_step)
     rows: list[dict[str, float]] = []
+    nll_counts: list[int] = []
 
     for rho_val in rho_grid:
-        builder = PoissonMatrixBuilder(rho=float(rho_val), max_goals_matrix=max_goals_matrix)
-        nll_sum = 0.0
-        for i in range(n_valid):
-            try:
-                matrix = builder.build_matrix(float(lam_h[i]), float(lam_a[i]))
-            except ValueError:
-                continue
-            prob = max(float(matrix[real_h[i], real_a[i]]), 1e-15)
-            nll_sum += -np.log(prob)
-        rows.append({"rho": round(float(rho_val), 4), "avg_nll": nll_sum / n_valid})
+        mean_nll, n_used = average_scoreline_nll(
+            lam_h, lam_a, real_h, real_a,
+            rho=float(rho_val), max_goals_matrix=max_goals_matrix,
+        )
+        rows.append({"rho": round(float(rho_val), 4), "avg_nll": float(mean_nll)})
+        nll_counts.append(n_used)
 
     grid_df = pd.DataFrame(rows)
     best_idx = int(grid_df["avg_nll"].idxmin())
+    n_matches = int(nll_counts[best_idx]) if nll_counts else n_valid
     return RhoCalibrationResult(
         best_rho=float(grid_df.loc[best_idx, "rho"]),
         best_nll=float(grid_df.loc[best_idx, "avg_nll"]),
-        n_matches=n_valid,
+        n_matches=n_matches,
         grid_df=grid_df,
     )
 

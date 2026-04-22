@@ -17,9 +17,12 @@ Public API:
 - GridSearchResult
 - build_param_grid
 - run_predictive_grid_search
+- run_predictive_nll_grid_search
 - plot_grid_search_1d
 - plot_grid_search_2d
+- plot_nll_grid_search_2d
 - RhoCalibrationResult
+- average_scoreline_nll
 - calibrate_rho
 - plot_rho_calibration
 """
@@ -35,7 +38,12 @@ from .evaluation import (
     score_single_prediction,
     summarize_predictions_1x2,
 )
-from .components import RhoCalibrationResult, calibrate_rho, plot_rho_calibration
+from .components import (
+    RhoCalibrationResult,
+    average_scoreline_nll,
+    calibrate_rho,
+    plot_rho_calibration,
+)
 from .interfaces import PredictiveModel, TrainablePredictiveModel
 from .ml import XGBoostPoissonModel
 from .statistical import PoissonDixonColesModel
@@ -44,7 +52,9 @@ from .tuning import (
     build_param_grid,
     plot_grid_search_1d,
     plot_grid_search_2d,
+    plot_nll_grid_search_2d,
     run_predictive_grid_search,
+    run_predictive_nll_grid_search,
 )
 
 __all__ = [
@@ -64,9 +74,12 @@ __all__ = [
     "GridSearchResult",
     "build_param_grid",
     "run_predictive_grid_search",
+    "run_predictive_nll_grid_search",
     "plot_grid_search_1d",
     "plot_grid_search_2d",
+    "plot_nll_grid_search_2d",
     "RhoCalibrationResult",
+    "average_scoreline_nll",
     "calibrate_rho",
     "plot_rho_calibration",
 ]

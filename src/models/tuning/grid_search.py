@@ -17,8 +17,10 @@ import pandas as pd
 from pandas.util import hash_pandas_object
 import seaborn as sns
 
+from ..components import average_scoreline_nll
 from ..evaluation import evaluate_score_predictions
 from ..interfaces import PredictiveModel
+from ..statistical import PoissonDixonColesModel
 
 
 CacheMode = Literal["off", "use", "refresh"]
@@ -220,6 +222,159 @@ def run_predictive_grid_search(
     return result
 
 
+def run_predictive_nll_grid_search(
+    *,
+    model_factory: Callable[..., PredictiveModel],
+    param_grid: Mapping[str, Sequence[Any]],
+    df: pd.DataFrame,
+    actual_home_col: str = "home_score",
+    actual_away_col: str = "away_score",
+    exp_goals_home_col: str = "exp_goals_home",
+    exp_goals_away_col: str = "exp_goals_away",
+    cache_mode: CacheMode = "off",
+    cache_dir: str | Path = "outputs/reports/grid_search_cache",
+    model_name: str | None = None,
+    data_fingerprint_columns: Sequence[str] | None = None,
+    show_progress: bool = True,
+) -> GridSearchResult:
+    """Grid search for :class:`~src.models.statistical.PoissonDixonColesModel` ranking on NLL.
+
+    For each parameter combination, runs ``model.predict`` and measures the
+    mean negative log-likelihood of the true scoreline under
+    :class:`~src.models.components.PoissonMatrixBuilder` with the model's
+    ``rho`` and ``max_goals_matrix``, using expected goals from
+    ``exp_goals_home_col`` and ``exp_goals_away_col`` in the prediction frame.
+
+    Lower ``objective_metric`` (equal to average NLL) is better. The returned
+    ``GridSearchResult`` is sorted with the best (lowest NLL) row first. Use
+    :func:`plot_grid_search_2d` with ``metric_name="objective_metric"`` to
+    visualize 2D grids.
+
+    Parameters
+    ----------
+    model_factory:
+        Must return a :class:`PoissonDixonColesModel` instance.
+    param_grid, df:
+        Same as :func:`run_predictive_grid_search` (1 or 2 tunable parameters).
+    actual_home_col, actual_away_col:
+        Observed goal columns in ``df`` (also present in ``model.predict`` output).
+    exp_goals_home_col, exp_goals_away_col:
+        Column names in the prediction output with per-row expected goals.
+    cache_mode, cache_dir, model_name, data_fingerprint_columns, show_progress:
+        Same meaning as in :func:`run_predictive_grid_search`. Cache key
+        includes ``objective: scoreline_nll`` so it does not collide with
+        point-based grid search.
+    """
+    _validate_param_grid(param_grid)
+    _validate_cache_mode(cache_mode)
+
+    ranking_metric = "avg_nll"
+    score_key = "avg_nll"
+    cache_path: Path | None = None
+    if cache_mode in {"use", "refresh"}:
+        cache_path = _build_cache_path(
+            cache_dir=cache_dir,
+            model_name=model_name or getattr(model_factory, "__name__", "model_factory"),
+            param_grid=param_grid,
+            score_key=score_key,
+            ranking_metric=ranking_metric,
+            pred_home_col=exp_goals_home_col,
+            pred_away_col=exp_goals_away_col,
+            actual_home_col=actual_home_col,
+            actual_away_col=actual_away_col,
+            df=df,
+            data_fingerprint_columns=data_fingerprint_columns,
+            cache_payload_extras={"objective": "scoreline_nll"},
+        )
+        if cache_mode == "use" and cache_path.exists():
+            return _read_cache_result(cache_path)
+
+    combinations = _parameter_combinations(param_grid)
+    result_rows: list[dict[str, Any]] = []
+    progress_start = time.perf_counter()
+    if show_progress:
+        _print_progress(
+            description="Predictive NLL grid search",
+            current=0,
+            total=len(combinations),
+            started_at=progress_start,
+        )
+
+    for index, params in enumerate(combinations, start=1):
+        model = model_factory(**params)
+        if not isinstance(model, PoissonDixonColesModel):
+            raise TypeError(
+                "run_predictive_nll_grid_search requires model_factory to return "
+                "a PoissonDixonColesModel instance.",
+            )
+        if not isinstance(model, PredictiveModel):
+            raise TypeError("model_factory must return an object implementing PredictiveModel.")
+
+        pred_df = model.predict(df)
+        for col in (exp_goals_home_col, exp_goals_away_col, actual_home_col, actual_away_col):
+            if col not in pred_df.columns:
+                raise ValueError(f"Column '{col}' not found in model prediction output.")
+
+        eval_data = pred_df[[exp_goals_home_col, exp_goals_away_col, actual_home_col, actual_away_col]].copy()
+        eval_data = eval_data.replace([np.inf, -np.inf], np.nan)
+        eval_data = eval_data.dropna(
+            subset=[exp_goals_home_col, exp_goals_away_col, actual_home_col, actual_away_col]
+        )
+        if eval_data.empty:
+            raise ValueError("No valid rows for NLL after dropping NaN in goals columns.")
+
+        lam_h = eval_data[exp_goals_home_col].to_numpy(dtype=np.float64)
+        lam_a = eval_data[exp_goals_away_col].to_numpy(dtype=np.float64)
+        act_h = eval_data[actual_home_col].to_numpy(dtype=np.float64)
+        act_a = eval_data[actual_away_col].to_numpy(dtype=np.float64)
+        act_h = np.rint(act_h).astype(np.intp)
+        act_a = np.rint(act_a).astype(np.intp)
+
+        mean_nll, n_used = average_scoreline_nll(
+            lam_h, lam_a, act_h, act_a,
+            rho=float(model.rho), max_goals_matrix=int(model.max_goals_matrix),
+        )
+
+        row = {
+            **params,
+            "objective_metric": float(mean_nll),
+            "avg_nll": float(mean_nll),
+            "matches_nll": int(n_used),
+        }
+        result_rows.append(row)
+        if show_progress:
+            _print_progress(
+                description="Predictive NLL grid search",
+                current=index,
+                total=len(combinations),
+                started_at=progress_start,
+            )
+    if show_progress:
+        print()
+
+    results_df = pd.DataFrame(result_rows)
+    results_df = results_df.sort_values(by="objective_metric", ascending=True).reset_index(
+        drop=True
+    )
+    best_row = results_df.iloc[0]
+    best_params = {name: _to_jsonable_scalar(best_row[name]) for name in param_grid.keys()}
+    best_metric = float(best_row["objective_metric"])
+
+    result = GridSearchResult(
+        results_df=results_df,
+        best_params=best_params,
+        best_metric=best_metric,
+        ranking_metric=ranking_metric,
+        cache_hit=False,
+        cache_path=str(cache_path) if cache_path is not None else None,
+    )
+
+    if cache_path is not None:
+        _write_cache_result(cache_path, result)
+
+    return result
+
+
 def plot_grid_search_1d(
     results_df: pd.DataFrame,
     *,
@@ -256,15 +411,43 @@ def plot_grid_search_1d(
     return ax
 
 
+def _heatmap_cmap(cmap: str, *, reverse: bool) -> str:
+    """Return a matplotlib colormap name, optionally reversed (``*_r``)."""
+    if not reverse:
+        return cmap
+    if cmap.endswith("_r"):
+        return cmap
+    return f"{cmap}_r"
+
+
 def plot_grid_search_2d(
     results_df: pd.DataFrame,
     *,
     x_param: str,
     y_param: str,
     metric_name: str = "objective_metric",
+    vmin: float | None = None,
+    vmax: float | None = None,
+    cmap: str = "viridis",
+    reverse_colormap: bool = False,
     ax: plt.Axes | None = None,
 ) -> plt.Axes:
-    """Plot 2D grid search results as heatmap."""
+    """Plot 2D grid search results as heatmap.
+
+    Parameters
+    ----------
+    vmin, vmax:
+        Optional limits for the colormap (forwarded to ``seaborn.heatmap``).
+        Use them when a few outlying values compress contrast—e.g. for NLL
+        heatmaps, set ``vmax`` near the bulk of the grid so local minima show up.
+    cmap:
+        Colormap name accepted by ``seaborn.heatmap`` / matplotlib.
+    reverse_colormap:
+        When ``True``, uses the reversed colormap (e.g. ``viridis`` →
+        ``viridis_r``) so that **low** metric values use the end of the scale
+        that is visually lighter. Useful for metrics where lower is better (NLL);
+        prefer :func:`plot_nll_grid_search_2d` for NLL with sensible defaults.
+    """
     _validate_plot_columns(results_df, [x_param, y_param, metric_name])
     pivot_df = results_df.pivot(index=y_param, columns=x_param, values=metric_name)
     pivot_df = pivot_df.sort_index(axis=0).sort_index(axis=1)
@@ -276,13 +459,89 @@ def plot_grid_search_2d(
     if ax is None:
         _, ax = plt.subplots(figsize=(9, 6))
 
-    sns.heatmap(pivot_df, annot=annot_df, fmt="", cmap="viridis", ax=ax)
+    heatmap_cmap = _heatmap_cmap(cmap, reverse=reverse_colormap)
+    heatmap_kwargs: dict[str, Any] = {
+        "annot": annot_df,
+        "fmt": "",
+        "cmap": heatmap_cmap,
+        "ax": ax,
+    }
+    if vmin is not None:
+        heatmap_kwargs["vmin"] = float(vmin)
+    if vmax is not None:
+        heatmap_kwargs["vmax"] = float(vmax)
+    sns.heatmap(pivot_df, **heatmap_kwargs)
     ax.set_title(f"Grid Search 2D: {y_param} vs {x_param}")
     ax.set_xlabel(x_param)
     ax.set_ylabel(y_param)
     ax.set_xticklabels([_format_param_value(value) for value in pivot_df.columns], rotation=45, ha="right")
     ax.set_yticklabels([_format_param_value(value) for value in pivot_df.index], rotation=0)
     return ax
+
+
+def plot_nll_grid_search_2d(
+    results_df: pd.DataFrame,
+    *,
+    x_param: str,
+    y_param: str,
+    metric_name: str = "objective_metric",
+    high_quantile: float | None = 0.95,
+    low_quantile: float | None = None,
+    reverse_colormap: bool = True,
+    cmap: str = "viridis",
+    ax: plt.Axes | None = None,
+) -> plt.Axes:
+    """Plot 2D grid search from :func:`run_predictive_nll_grid_search` with NLL-friendly defaults.
+
+    Sets color limits from the metric column so outliers do not flatten contrast:
+    ``vmin`` from the column minimum (or a lower quantile), ``vmax`` from
+    ``high_quantile`` (default 0.95) when not ``None``. By default uses a
+    **reversed** colormap so **lower** NLL (better) maps to **lighter** colors.
+
+    Internally calls :func:`plot_grid_search_2d`.
+
+    Parameters
+    ----------
+    high_quantile:
+        Upper quantile for ``vmax``. Use ``None`` to leave ``vmax`` unset
+        (full data range for the upper end).
+    low_quantile:
+        If ``None`` (default), ``vmin`` is the column minimum. Otherwise
+        ``vmin`` is ``metric.quantile(low_quantile)`` (e.g. ``0.05`` for a
+        robust lower bound).
+    reverse_colormap:
+        Default ``True``: low NLL is drawn with the lighter end of the scale.
+    """
+    _validate_plot_columns(results_df, [x_param, y_param, metric_name])
+    series = results_df[metric_name]
+    if low_quantile is not None:
+        lq = float(low_quantile)
+        if not 0.0 <= lq <= 1.0:
+            raise ValueError("low_quantile must be in [0, 1].")
+    if low_quantile is None:
+        vmin: float | None = float(series.min())
+    else:
+        vmin = float(series.quantile(float(low_quantile)))
+    if high_quantile is None:
+        vmax: float | None = None
+    else:
+        hq = float(high_quantile)
+        if not 0.0 < hq <= 1.0:
+            raise ValueError("high_quantile must be in (0, 1] when not None.")
+        vmax = float(series.quantile(hq))
+    if vmin is not None and vmax is not None and vmax <= vmin:
+        vmin, vmax = None, None
+    return plot_grid_search_2d(
+        results_df,
+        x_param=x_param,
+        y_param=y_param,
+        metric_name=metric_name,
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+        reverse_colormap=reverse_colormap,
+        ax=ax,
+    )
 
 
 def _validate_param_grid(param_grid: Mapping[str, Sequence[Any]]) -> None:
@@ -321,6 +580,7 @@ def _build_cache_path(
     actual_away_col: str,
     df: pd.DataFrame,
     data_fingerprint_columns: Sequence[str] | None,
+    cache_payload_extras: Mapping[str, Any] | None = None,
 ) -> Path:
     safe_model_name = _safe_filename_part(model_name)
     fp_columns = list(df.columns if data_fingerprint_columns is None else data_fingerprint_columns)
@@ -328,7 +588,7 @@ def _build_cache_path(
     if missing:
         raise ValueError(f"Missing fingerprint columns in DataFrame: {missing}")
 
-    payload = {
+    payload: dict[str, Any] = {
         "model_name": model_name,
         "param_grid": {k: list(v) for k, v in param_grid.items()},
         "score_key": score_key,
@@ -340,6 +600,9 @@ def _build_cache_path(
         "data_fingerprint_columns": fp_columns,
         "data_fingerprint": _fingerprint_dataframe(df, fp_columns),
     }
+    if cache_payload_extras is not None:
+        for extra_key, extra_val in cache_payload_extras.items():
+            payload[extra_key] = extra_val
     payload_json = json.dumps(payload, sort_keys=True, default=str)
     key = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()[:16]
 

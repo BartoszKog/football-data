@@ -3,6 +3,7 @@
 Public API:
 - ProbabilityMatrixBuilder
 - PoissonMatrixBuilder
+- average_scoreline_nll
 - RhoCalibrationResult
 - calibrate_rho
 - plot_rho_calibration
@@ -15,6 +16,7 @@ from .matrix_builders import (
     PoissonMatrixBuilder,
     ProbabilityMatrixBuilder,
     RhoCalibrationResult,
+    average_scoreline_nll,
     calibrate_rho,
     plot_rho_calibration,
 )
@@ -23,6 +25,7 @@ from .optimizers import ExpectedPointsOptimizer, ExpectedPointsRule, ScoreOptimi
 __all__ = [
     "ProbabilityMatrixBuilder",
     "PoissonMatrixBuilder",
+    "average_scoreline_nll",
     "RhoCalibrationResult",
     "calibrate_rho",
     "plot_rho_calibration",

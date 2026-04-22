@@ -42,6 +42,8 @@ Zobacz też: [Korekta Dixona-Colesa](../concepts/dixon-coles-correction.md),
 
 ::: src.models.components.calibrate_rho
 
+::: src.models.components.average_scoreline_nll
+
 ::: src.models.components.plot_rho_calibration
 
 ::: src.models.components.ExpectedPointsRule

@@ -231,6 +231,59 @@ search = run_predictive_grid_search(
 )
 ```
 
+### Średnia NLL wyniku — `run_predictive_nll_grid_search`
+
+Dla
+[`PoissonDixonColesModel`][src.models.statistical.PoissonDixonColesModel]
+możesz przeszukać tę samą siatkę hiperparametrów pod kątem **średniej
+ujemnej log-wiarygodności (NLL)** obserwowanego wyniku w macierzy
+Dixona-Colesa (patrz
+[`average_scoreline_nll`][src.models.components.average_scoreline_nll]).
+To **inny** cel niż `avg_points` z
+[`run_predictive_grid_search`][src.models.tuning.run_predictive_grid_search]
+— optimum na mapie 2D może być w innym miejscu.
+
+[`run_predictive_nll_grid_search`][src.models.tuning.run_predictive_nll_grid_search]
+zwraca ten sam
+[`GridSearchResult`][src.models.tuning.GridSearchResult] co zwykły grid
+search; wynik rankuje po `avg_nll`: **im niższa** `objective_metric`, tym
+lepiej. Do heatmapy 2D użyj
+[`plot_nll_grid_search_2d`][src.models.tuning.plot_nll_grid_search_2d] (domyślnie
+odcina górny ``vmax`` do 95. percentyla, lżejszy kolor = lepsze NLL) albo
+ręcznie
+[`plot_grid_search_2d`][src.models.tuning.plot_grid_search_2d] z
+`metric_name="objective_metric"`, opcjonalnymi ``vmin``/``vmax`` i
+`reverse_colormap=True`. Dla samej **jednowymiarowej** siatki
+po tylko `ρ` i NLL, wygodne pozostają
+[`calibrate_rho`][src.models.components.calibrate_rho] oraz
+[`plot_rho_calibration`][src.models.components.plot_rho_calibration].
+
+```python
+from src.models import (
+    plot_nll_grid_search_2d,
+    run_predictive_nll_grid_search,
+)
+
+search_nll = run_predictive_nll_grid_search(
+    model_factory=model_factory,
+    param_grid=param_grid,
+    df=df,
+    cache_mode="use",
+)
+ax = plot_nll_grid_search_2d(
+    search_nll.results_df,
+    x_param="bias_correction",
+    y_param="rho",
+    metric_name="objective_metric",
+)
+```
+
+![Grid search 2D: trimmed_avg / NLL](../assets/nll_gs.png)
+
+/// figure-caption
+Rysunek 4. 2D grid search po `NLL` dla `PoissonDixonColesModel` na pełnych sezonach historycznych, ranking po `avg_points` (trimmed_avg).
+///
+
 ## 5. Cache
 
 Grid search bywa drogi (kombinacje × predykcje). `cache_mode` kontroluje
@@ -243,8 +296,11 @@ zachowanie:
 | `"refresh"` | Zawsze policz od nowa i nadpisz cache. | Po zmianie danych/logiki modelu. |
 
 Klucz cache buduje się z nazwy `model_factory`, `param_grid`, `score_key`,
-nazw kolumn prediction/actual, i fingerprintu DataFrame. Zmiana któregokolwiek
-z nich → nowy plik cache (oryginał nadal istnieje).
+nazw kolumn prediction/actual, i fingerprintu DataFrame. Dla
+`run_predictive_nll_grid_search` payload zawiera dodatkowo
+`objective: scoreline_nll` (inny plik niż ten sam `param_grid` w
+`run_predictive_grid_search`). Zmiana któregokolwiek z tych elementów
+→ nowy plik cache (oryginał nadal istnieje).
 
 ```python
 search = run_predictive_grid_search(
@@ -321,7 +377,9 @@ W każdym foldzie: `fit(train_df, eval_df=val_df)` (val = early stopping),
 - [`GridSearchResult`][src.models.tuning.GridSearchResult]
 - [`plot_grid_search_1d`][src.models.tuning.plot_grid_search_1d]
 - [`plot_grid_search_2d`][src.models.tuning.plot_grid_search_2d]
+- [`plot_nll_grid_search_2d`][src.models.tuning.plot_nll_grid_search_2d]
 - [`run_predictive_grid_search`][src.models.tuning.run_predictive_grid_search]
+- [`run_predictive_nll_grid_search`][src.models.tuning.run_predictive_nll_grid_search]
 - [`run_trainable_grid_search_three_way`][src.models.tuning.run_trainable_grid_search_three_way]
 - [`SeasonWalkForwardFold`][src.models.tuning.SeasonWalkForwardFold]
 - [`make_season_walk_forward_splits`][src.models.tuning.make_season_walk_forward_splits]
