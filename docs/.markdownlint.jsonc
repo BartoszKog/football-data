@@ -1,0 +1,57 @@
+// Lokalna konfiguracja markdownlint dla dokumentacji MkDocs.
+// Dziala tylko wewnatrz folderu docs/ - README.md i inne pliki w roocie
+// zostaja pod domyslnymi, bardziej rygorystycznymi regulami CommonMark.
+//
+// Wylaczamy TYLKO te reguly, ktore koliduja z pymdownx / shadcn /
+// md_in_html (raw HTML, front-matter, matematyka, dlugie linie).
+// Pozostale reguly (MD009 trailing whitespace, MD031/MD032 puste linie
+// wokol blokow, MD040 jezyk w code-blocku, MD047 newline na koncu pliku...)
+// sa dalej aktywne - bo to prawdziwe bledy higieny.
+{
+  "default": true,
+
+  // MD025 (single-title) domyslnie traktuje "title:" we front-matter jako H1,
+  // przez co H1 w body jest raportowany jako "drugi H1". Mowimy rule: ignoruj
+  // front-matter przy liczeniu H1-ek. Dzieki temu reguly dalej broni nas przed
+  // PRAWDZIWYM duplikatem H1 w body (gdybysmy przez pomylke dopisali drugie "#").
+  "MD025": {
+    "front_matter_title": ""
+  },
+
+  // MkDocs zacheca do raw HTML: admonition, inline <svg>, <figure>,
+  // <figcaption>, <br/>, spany z klasami. MD033 by to wszystko zglaszal.
+  "MD033": false,
+
+  // Dluzsze linie sa OK - docs po polsku + diakrytyki + linki MkDocs bywaja
+  // dlugie. Tabele i bloki kodu wylaczone z limitu (latwo przekroczyc).
+  "MD013": {
+    "line_length": 900,
+    "tables": false,
+    "code_blocks": false,
+    "headings": false
+  },
+
+  // Admonition "!!! info" uzywa wciecia 4 spacji pod naglowkiem.
+  // Trzymamy standardowe 2 spacje dla normalnych list.
+  "MD007": {
+    "indent": 2,
+    "start_indented": false
+  },
+
+  // pymdownx.arithmatex: $...$ / $$...$$ markdownlint myli z emfaza.
+  "MD037": false,
+
+  // LaTeX: indeksy dolne (_{home}, B_0) — MD049 myli z emfaza _..._ vs *...*.
+  "MD049": false,
+
+  // Duplikaty naglowkow sa OK o ile sa w roznych sekcjach
+  // (np. "Przyklad" w wielu guides).
+  "MD024": {
+    "siblings_only": true
+  },
+
+  // Naglowki moga konczyc sie "?" albo ":" - to naturalne w narracji PL.
+  "MD026": {
+    "punctuation": ".,;!"
+  }
+}
