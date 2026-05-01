@@ -41,3 +41,33 @@ sparowany t-test deviance oraz wizualizacje ewaluacji predykcji.
 example result of `plot_predictions_summary`:
 
 ![plot_predictions_summary example](../assets/predictions_summary_poisson_dc.png)
+
+## PIT diagnostics
+
+Probability Integral Transform (PIT) helpers for scoreline matrix calibration:
+component extraction, randomized PIT replicates, summary statistics, and
+plotting helpers.
+
+::: src.models.evaluation.PITDistribution
+
+::: src.models.evaluation.PITVariant
+
+::: src.models.evaluation.PITDiagnosticsResult
+
+::: src.models.evaluation.available_pit_variants
+
+::: src.models.evaluation.get_pit_variant
+
+::: src.models.evaluation.resolve_pit_variants
+
+::: src.models.evaluation.build_pit_components
+
+::: src.models.evaluation.randomized_pit_replicates_from_components
+
+::: src.models.evaluation.summarize_pit_uniformity
+
+::: src.models.evaluation.build_pit_diagnostics
+
+::: src.models.evaluation.plot_pit_histogram_replicates
+
+::: src.models.evaluation.plot_pit_worm_replicates

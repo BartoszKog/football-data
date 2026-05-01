@@ -47,6 +47,9 @@ warianty poszczególnych funkcji i dlaczego pewne decyzje (np. konkretna wartoś
   wykresy, deviance.
 - [Grid search i tuning](guides/06-grid-search-and-tuning.md) — 1D/2D grid
   search, cache, trainable grid search z walk-forward po sezonach.
+- [Interpretacja PIT i worm plot](guides/07-pit-diagnostics-interpretation.md) —
+  jak czytać kształty diagnostyczne dla dobrej kalibracji, biasu lambd i
+  over/underconfidence.
 
 ### +lucide:lightbulb+ Concepts (dlaczego tak)
 
