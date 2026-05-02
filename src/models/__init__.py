@@ -18,6 +18,7 @@ Public API:
 - build_param_grid
 - run_predictive_grid_search
 - run_predictive_nll_grid_search
+- run_predictive_points_weighted_nll_grid_search
 - plot_grid_search_1d
 - plot_grid_search_2d
 - plot_nll_grid_search_2d
@@ -58,6 +59,7 @@ from .evaluation import (
 )
 from .components import (
     RhoCalibrationResult,
+    average_points_weighted_scoreline_nll,
     average_scoreline_nll,
     calibrate_rho,
     plot_rho_calibration,
@@ -73,6 +75,7 @@ from .tuning import (
     plot_nll_grid_search_2d,
     run_predictive_grid_search,
     run_predictive_nll_grid_search,
+    run_predictive_points_weighted_nll_grid_search,
 )
 
 __all__ = [
@@ -93,10 +96,12 @@ __all__ = [
     "build_param_grid",
     "run_predictive_grid_search",
     "run_predictive_nll_grid_search",
+    "run_predictive_points_weighted_nll_grid_search",
     "plot_grid_search_1d",
     "plot_grid_search_2d",
     "plot_nll_grid_search_2d",
     "RhoCalibrationResult",
+    "average_points_weighted_scoreline_nll",
     "average_scoreline_nll",
     "calibrate_rho",
     "plot_rho_calibration",

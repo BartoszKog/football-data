@@ -4,6 +4,7 @@ Public API:
 - ProbabilityMatrixBuilder
 - PoissonMatrixBuilder
 - average_scoreline_nll
+- average_points_weighted_scoreline_nll
 - RhoCalibrationResult
 - calibrate_rho
 - plot_rho_calibration
@@ -16,6 +17,7 @@ from .matrix_builders import (
     PoissonMatrixBuilder,
     ProbabilityMatrixBuilder,
     RhoCalibrationResult,
+    average_points_weighted_scoreline_nll,
     average_scoreline_nll,
     calibrate_rho,
     plot_rho_calibration,
@@ -26,6 +28,7 @@ __all__ = [
     "ProbabilityMatrixBuilder",
     "PoissonMatrixBuilder",
     "average_scoreline_nll",
+    "average_points_weighted_scoreline_nll",
     "RhoCalibrationResult",
     "calibrate_rho",
     "plot_rho_calibration",

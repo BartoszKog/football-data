@@ -284,6 +284,45 @@ ax = plot_nll_grid_search_2d(
 Rysunek 4. 2D grid search po `NLL` dla `PoissonDixonColesModel` na pełnych sezonach historycznych, ranking po `avg_points` (trimmed_avg).
 ///
 
+### Ważona NLL pod scoring 3/2/1 — `run_predictive_points_weighted_nll_grid_search`
+
+Jeśli chcesz, aby objective częściowo „nagradzał” także rozkłady dające
+trafienia za 2 i 1 punkt (a nie tylko exact score), użyj:
+[`run_predictive_points_weighted_nll_grid_search`][src.models.tuning.run_predictive_points_weighted_nll_grid_search].
+Wynik nadal rankuje po minimalizacji `objective_metric` (im niżej, tym lepiej).
+
+Krótki snippet z notebooka raportowego:
+
+```python
+param_grid_weighted_nll = build_param_grid(
+    {
+        "rho": {"start": 0.42, "stop": 0.80, "step": 0.02},
+        "bias_correction": {"start": 0.34, "stop": 0.56, "step": 0.02},
+    }
+)
+
+search_avg_odds_weighted_nll_extreme_grid = run_predictive_points_weighted_nll_grid_search(
+    model_factory=model_factory,
+    param_grid=param_grid_weighted_nll,
+    df=df_avg_odds,
+    cache_mode="use",
+)
+
+ax = plot_nll_grid_search_2d(
+    search_avg_odds_weighted_nll_extreme_grid.results_df,
+    x_param="bias_correction",
+    y_param="rho",
+    metric_name="objective_metric",
+)
+```
+
+![Grid search 2D: weighted NLL](../assets/weight_nll_result.png)
+
+/// figure-caption
+Rysunek 5. Heatmapa 2D dla `run_predictive_points_weighted_nll_grid_search`
+(`rho` x `bias_correction`) z notebooka `poisson_dixon_coles_baseline.py`.
+///
+
 ## 5. Cache
 
 Grid search bywa drogi (kombinacje × predykcje). `cache_mode` kontroluje
@@ -368,7 +407,9 @@ W każdym foldzie: `fit(train_df, eval_df=val_df)` (val = early stopping),
 
 | Funkcja | Model | Kiedy użyć |
 | --- | --- | --- |
-| [`run_predictive_grid_search`][src.models.tuning.run_predictive_grid_search] | Non-trainable (`PoissonDixonColesModel`) | Model statystyczny bez uczenia; parametry typu `rho`, `bias_correction`. |
+| [`run_predictive_grid_search`][src.models.tuning.run_predictive_grid_search] | Non-trainable (`PoissonDixonColesModel`) | Model statystyczny bez uczenia; ranking po metrykach punktowych (`avg_points`, `total_points` itd.). |
+| [`run_predictive_nll_grid_search`][src.models.tuning.run_predictive_nll_grid_search] | Non-trainable (`PoissonDixonColesModel`) | Ranking po kalibracyjnej metryce `avg_nll` (exact-score log-likelihood). |
+| [`run_predictive_points_weighted_nll_grid_search`][src.models.tuning.run_predictive_points_weighted_nll_grid_search] | Non-trainable (`PoissonDixonColesModel`) | Ranking po ważonej NLL, gdzie objective uwzględnia także masę prawdopodobieństwa trafień 2/1 punktu. |
 | [`run_trainable_grid_search_three_way`][src.models.tuning.run_trainable_grid_search_three_way] | Trainable (`XGBoostPoissonModel` z early stopping) | Grid po sezonach; `fit(..., eval_df=val_df)` + metryki na osobnym sezonie eval. |
 
 ## 8. Cross-refs do API
@@ -380,6 +421,7 @@ W każdym foldzie: `fit(train_df, eval_df=val_df)` (val = early stopping),
 - [`plot_nll_grid_search_2d`][src.models.tuning.plot_nll_grid_search_2d]
 - [`run_predictive_grid_search`][src.models.tuning.run_predictive_grid_search]
 - [`run_predictive_nll_grid_search`][src.models.tuning.run_predictive_nll_grid_search]
+- [`run_predictive_points_weighted_nll_grid_search`][src.models.tuning.run_predictive_points_weighted_nll_grid_search]
 - [`run_trainable_grid_search_three_way`][src.models.tuning.run_trainable_grid_search_three_way]
 - [`SeasonWalkForwardFold`][src.models.tuning.SeasonWalkForwardFold]
 - [`make_season_walk_forward_splits`][src.models.tuning.make_season_walk_forward_splits]

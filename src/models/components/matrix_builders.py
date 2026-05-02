@@ -161,6 +161,87 @@ def average_scoreline_nll(
     return (nll_sum / n_used, n_used)
 
 
+def average_points_weighted_scoreline_nll(
+    lambda_home: np.ndarray,
+    lambda_away: np.ndarray,
+    actual_home: np.ndarray,
+    actual_away: np.ndarray,
+    *,
+    rho: float,
+    max_goals_matrix: int,
+    exact_weight: float = 1.0,
+    goal_diff_weight: float = 2.0 / 3.0,
+    outcome_weight: float = 1.0 / 3.0,
+) -> tuple[float, int]:
+    """Average weighted scoreline NLL aligned with 3/2/1 score utility.
+
+    For each match, the method builds a Dixon-Coles probability matrix and
+    computes weighted probability mass relative to the realized score:
+    - exact score receives ``exact_weight``,
+    - same goal difference (excluding exact) receives ``goal_diff_weight``,
+    - same 1x2 outcome (excluding exact/goal-difference) receives ``outcome_weight``.
+
+    The per-match loss is ``-log(max(weighted_prob, 1e-15))`` and the function
+    returns the average across all valid matches.
+    """
+    lam_h = np.asarray(lambda_home, dtype=np.float64)
+    lam_a = np.asarray(lambda_away, dtype=np.float64)
+    real_h = np.asarray(actual_home, dtype=np.intp)
+    real_a = np.asarray(actual_away, dtype=np.intp)
+
+    if not (lam_h.shape == lam_a.shape == real_h.shape == real_a.shape):
+        raise ValueError("All input arrays must have the same shape.")
+    if exact_weight <= 0:
+        raise ValueError("exact_weight must be greater than 0.")
+    if goal_diff_weight < 0 or outcome_weight < 0:
+        raise ValueError("goal_diff_weight and outcome_weight must be non-negative.")
+
+    mask = (real_h >= 0) & (real_h <= max_goals_matrix) & (real_a >= 0) & (real_a <= max_goals_matrix)
+    lam_h = lam_h[mask]
+    lam_a = lam_a[mask]
+    real_h = real_h[mask]
+    real_a = real_a[mask]
+    n_masked = int(mask.sum())
+
+    if n_masked == 0:
+        raise ValueError("No valid matches after filtering by max_goals_matrix.")
+
+    builder = PoissonMatrixBuilder(rho=float(rho), max_goals_matrix=max_goals_matrix)
+    matrix_size = max_goals_matrix + 1
+    goals = np.arange(matrix_size, dtype=np.intp)
+    goal_diff_grid = goals[:, None] - goals[None, :]
+    outcome_grid = np.sign(goal_diff_grid)
+
+    nll_sum = 0.0
+    n_used = 0
+    for i in range(n_masked):
+        try:
+            matrix = builder.build_matrix(float(lam_h[i]), float(lam_a[i]))
+        except ValueError:
+            continue
+
+        exact_mask = np.zeros_like(matrix, dtype=bool)
+        exact_mask[real_h[i], real_a[i]] = True
+
+        actual_diff = int(real_h[i] - real_a[i])
+        goal_diff_mask = (goal_diff_grid == actual_diff) & ~exact_mask
+
+        actual_outcome = int(np.sign(actual_diff))
+        outcome_mask = (outcome_grid == actual_outcome) & ~exact_mask & ~goal_diff_mask
+
+        weighted_prob = (
+            exact_weight * float(matrix[exact_mask].sum())
+            + goal_diff_weight * float(matrix[goal_diff_mask].sum())
+            + outcome_weight * float(matrix[outcome_mask].sum())
+        )
+        nll_sum += -np.log(max(weighted_prob, 1e-15))
+        n_used += 1
+
+    if n_used == 0:
+        raise ValueError("No match produced a valid probability matrix for NLL.")
+    return (nll_sum / n_used, n_used)
+
+
 @dataclass(frozen=True)
 class RhoCalibrationResult:
     """Container returned by :func:`calibrate_rho`."""

@@ -17,8 +17,12 @@ import pandas as pd
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), ".")))
 
 from src.models import PoissonDixonColesModel
-from src.models.components import average_scoreline_nll
-from src.models.tuning.grid_search import plot_nll_grid_search_2d, run_predictive_nll_grid_search
+from src.models.components import average_points_weighted_scoreline_nll, average_scoreline_nll
+from src.models.tuning.grid_search import (
+    plot_nll_grid_search_2d,
+    run_predictive_nll_grid_search,
+    run_predictive_points_weighted_nll_grid_search,
+)
 
 
 def _tiny_odds_df() -> pd.DataFrame:
@@ -58,6 +62,36 @@ class TestAverageScorelineNll(unittest.TestCase):
         self.assertTrue(np.isfinite(mean_nll))
         self.assertGreater(mean_nll, 0.0)
 
+    def test_average_points_weighted_scoreline_nll_not_worse_than_exact_nll(self):
+        lam_h = np.array([1.2, 1.5], dtype=np.float64)
+        lam_a = np.array([1.0, 1.1], dtype=np.float64)
+        h = np.array([1, 2], dtype=np.intp)
+        a = np.array([1, 0], dtype=np.intp)
+        rho = -0.1
+        max_g = 6
+
+        weighted_nll, n_weighted = average_points_weighted_scoreline_nll(
+            lam_h,
+            lam_a,
+            h,
+            a,
+            rho=rho,
+            max_goals_matrix=max_g,
+        )
+        exact_nll, n_exact = average_scoreline_nll(
+            lam_h,
+            lam_a,
+            h,
+            a,
+            rho=rho,
+            max_goals_matrix=max_g,
+        )
+        self.assertEqual(n_weighted, 2)
+        self.assertEqual(n_exact, 2)
+        self.assertTrue(np.isfinite(weighted_nll))
+        self.assertGreater(weighted_nll, 0.0)
+        self.assertLessEqual(weighted_nll, exact_nll)
+
 
 class TestRunPredictiveNllGridSearch(unittest.TestCase):
     def test_run_predictive_nll_grid_search_smoke(self):
@@ -81,6 +115,30 @@ class TestRunPredictiveNllGridSearch(unittest.TestCase):
         self.assertEqual(result.best_metric, best)
         self.assertTrue(result.results_df["objective_metric"].is_monotonic_increasing)
         # Best row is at top (lowest NLL)
+        self.assertEqual(float(result.results_df.iloc[0]["objective_metric"]), result.best_metric)
+
+    def test_run_predictive_points_weighted_nll_grid_search_smoke(self):
+        df = _tiny_odds_df()
+
+        def _factory(*, rho: float, bias_correction: float) -> PoissonDixonColesModel:
+            return PoissonDixonColesModel(
+                rho=rho, bias_correction=bias_correction, use_over25_interpolation=True
+            )
+
+        result = run_predictive_points_weighted_nll_grid_search(
+            model_factory=_factory,
+            param_grid={"rho": [-0.1, 0.0], "bias_correction": [1.0, 1.02]},
+            df=df,
+            show_progress=False,
+        )
+        self.assertEqual(result.ranking_metric, "avg_points_weighted_nll")
+        self.assertEqual(result.results_df.shape[0], 4)
+        self.assertIn("objective_metric", result.results_df.columns)
+        self.assertIn("avg_points_weighted_nll", result.results_df.columns)
+        self.assertIn("avg_nll", result.results_df.columns)
+        best = result.results_df["objective_metric"].min()
+        self.assertEqual(result.best_metric, best)
+        self.assertTrue(result.results_df["objective_metric"].is_monotonic_increasing)
         self.assertEqual(float(result.results_df.iloc[0]["objective_metric"]), result.best_metric)
 
 

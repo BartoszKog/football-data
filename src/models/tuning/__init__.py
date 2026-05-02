@@ -5,6 +5,7 @@ Public API:
 - build_param_grid
 - run_predictive_grid_search
 - run_predictive_nll_grid_search
+- run_predictive_points_weighted_nll_grid_search
 - SeasonWalkForwardFold
 - make_season_walk_forward_splits
 - run_trainable_grid_search_three_way
@@ -21,6 +22,7 @@ from .grid_search import (
     plot_nll_grid_search_2d,
     run_predictive_grid_search,
     run_predictive_nll_grid_search,
+    run_predictive_points_weighted_nll_grid_search,
 )
 from .time_splits import (
     SeasonWalkForwardFold,
@@ -33,6 +35,7 @@ __all__ = [
     "build_param_grid",
     "run_predictive_grid_search",
     "run_predictive_nll_grid_search",
+    "run_predictive_points_weighted_nll_grid_search",
     "SeasonWalkForwardFold",
     "make_season_walk_forward_splits",
     "run_trainable_grid_search_three_way",

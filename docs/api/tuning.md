@@ -4,7 +4,7 @@ summary: Grid search (predictive i sezonowy trainable) oraz walk-forward po sezo
 sidebar_title: src.models.tuning
 order: 4
 description: API modulu src.models.tuning - run_predictive_grid_search, run_predictive_nll_grid_search, run_trainable_grid_search_three_way, make_season_walk_forward_splits.
-keywords: src.models.tuning, grid search, NLL, walk-forward, season splits, plot grid search
+keywords: src.models.tuning, grid search, NLL, weighted NLL, walk-forward, season splits, plot grid search
 ---
 
 # +lucide:sliders-horizontal+ API — `src.models.tuning`
@@ -25,6 +25,8 @@ Zobacz też: [Grid search i tuning](../guides/06-grid-search-and-tuning.md).
 ::: src.models.tuning.run_predictive_grid_search
 
 ::: src.models.tuning.run_predictive_nll_grid_search
+
+::: src.models.tuning.run_predictive_points_weighted_nll_grid_search
 
 ::: src.models.tuning.run_trainable_grid_search_three_way
 

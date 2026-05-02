@@ -17,7 +17,7 @@ import pandas as pd
 from pandas.util import hash_pandas_object
 import seaborn as sns
 
-from ..components import average_scoreline_nll
+from ..components import average_points_weighted_scoreline_nll, average_scoreline_nll
 from ..evaluation import evaluate_score_predictions
 from ..interfaces import PredictiveModel
 from ..statistical import PoissonDixonColesModel
@@ -345,6 +345,163 @@ def run_predictive_nll_grid_search(
         if show_progress:
             _print_progress(
                 description="Predictive NLL grid search",
+                current=index,
+                total=len(combinations),
+                started_at=progress_start,
+            )
+    if show_progress:
+        print()
+
+    results_df = pd.DataFrame(result_rows)
+    results_df = results_df.sort_values(by="objective_metric", ascending=True).reset_index(
+        drop=True
+    )
+    best_row = results_df.iloc[0]
+    best_params = {name: _to_jsonable_scalar(best_row[name]) for name in param_grid.keys()}
+    best_metric = float(best_row["objective_metric"])
+
+    result = GridSearchResult(
+        results_df=results_df,
+        best_params=best_params,
+        best_metric=best_metric,
+        ranking_metric=ranking_metric,
+        cache_hit=False,
+        cache_path=str(cache_path) if cache_path is not None else None,
+    )
+
+    if cache_path is not None:
+        _write_cache_result(cache_path, result)
+
+    return result
+
+
+def run_predictive_points_weighted_nll_grid_search(
+    *,
+    model_factory: Callable[..., PredictiveModel],
+    param_grid: Mapping[str, Sequence[Any]],
+    df: pd.DataFrame,
+    actual_home_col: str = "home_score",
+    actual_away_col: str = "away_score",
+    exp_goals_home_col: str = "exp_goals_home",
+    exp_goals_away_col: str = "exp_goals_away",
+    exact_weight: float = 1.0,
+    goal_diff_weight: float = 2.0 / 3.0,
+    outcome_weight: float = 1.0 / 3.0,
+    cache_mode: CacheMode = "off",
+    cache_dir: str | Path = "outputs/reports/grid_search_cache",
+    model_name: str | None = None,
+    data_fingerprint_columns: Sequence[str] | None = None,
+    show_progress: bool = True,
+) -> GridSearchResult:
+    """Grid search for Poisson-Dixon-Coles models ranking on points-weighted NLL.
+
+    The objective uses weighted probability mass of outcomes relative to the
+    realized scoreline:
+    - exact score with ``exact_weight``,
+    - goal-difference hit (non-exact) with ``goal_diff_weight``,
+    - 1x2 outcome hit (non-exact/non-goal-diff) with ``outcome_weight``.
+
+    Lower ``objective_metric`` is better and equals ``avg_points_weighted_nll``.
+    """
+    _validate_param_grid(param_grid)
+    _validate_cache_mode(cache_mode)
+
+    ranking_metric = "avg_points_weighted_nll"
+    score_key = "avg_points_weighted_nll"
+    cache_path: Path | None = None
+    if cache_mode in {"use", "refresh"}:
+        cache_path = _build_cache_path(
+            cache_dir=cache_dir,
+            model_name=model_name or getattr(model_factory, "__name__", "model_factory"),
+            param_grid=param_grid,
+            score_key=score_key,
+            ranking_metric=ranking_metric,
+            pred_home_col=exp_goals_home_col,
+            pred_away_col=exp_goals_away_col,
+            actual_home_col=actual_home_col,
+            actual_away_col=actual_away_col,
+            df=df,
+            data_fingerprint_columns=data_fingerprint_columns,
+            cache_payload_extras={
+                "objective": "points_weighted_scoreline_nll",
+                "exact_weight": float(exact_weight),
+                "goal_diff_weight": float(goal_diff_weight),
+                "outcome_weight": float(outcome_weight),
+            },
+        )
+        if cache_mode == "use" and cache_path.exists():
+            return _read_cache_result(cache_path)
+
+    combinations = _parameter_combinations(param_grid)
+    result_rows: list[dict[str, Any]] = []
+    progress_start = time.perf_counter()
+    if show_progress:
+        _print_progress(
+            description="Predictive points-weighted NLL grid search",
+            current=0,
+            total=len(combinations),
+            started_at=progress_start,
+        )
+
+    for index, params in enumerate(combinations, start=1):
+        model = model_factory(**params)
+        if not isinstance(model, PoissonDixonColesModel):
+            raise TypeError(
+                "run_predictive_points_weighted_nll_grid_search requires model_factory "
+                "to return a PoissonDixonColesModel instance.",
+            )
+        if not isinstance(model, PredictiveModel):
+            raise TypeError("model_factory must return an object implementing PredictiveModel.")
+
+        pred_df = model.predict(df)
+        for col in (exp_goals_home_col, exp_goals_away_col, actual_home_col, actual_away_col):
+            if col not in pred_df.columns:
+                raise ValueError(f"Column '{col}' not found in model prediction output.")
+
+        eval_data = pred_df[[exp_goals_home_col, exp_goals_away_col, actual_home_col, actual_away_col]].copy()
+        eval_data = eval_data.replace([np.inf, -np.inf], np.nan)
+        eval_data = eval_data.dropna(
+            subset=[exp_goals_home_col, exp_goals_away_col, actual_home_col, actual_away_col]
+        )
+        if eval_data.empty:
+            raise ValueError("No valid rows for NLL after dropping NaN in goals columns.")
+
+        lam_h = eval_data[exp_goals_home_col].to_numpy(dtype=np.float64)
+        lam_a = eval_data[exp_goals_away_col].to_numpy(dtype=np.float64)
+        act_h = np.rint(eval_data[actual_home_col].to_numpy(dtype=np.float64)).astype(np.intp)
+        act_a = np.rint(eval_data[actual_away_col].to_numpy(dtype=np.float64)).astype(np.intp)
+
+        mean_weighted_nll, n_used = average_points_weighted_scoreline_nll(
+            lam_h,
+            lam_a,
+            act_h,
+            act_a,
+            rho=float(model.rho),
+            max_goals_matrix=int(model.max_goals_matrix),
+            exact_weight=float(exact_weight),
+            goal_diff_weight=float(goal_diff_weight),
+            outcome_weight=float(outcome_weight),
+        )
+        mean_nll, _ = average_scoreline_nll(
+            lam_h,
+            lam_a,
+            act_h,
+            act_a,
+            rho=float(model.rho),
+            max_goals_matrix=int(model.max_goals_matrix),
+        )
+
+        row = {
+            **params,
+            "objective_metric": float(mean_weighted_nll),
+            "avg_points_weighted_nll": float(mean_weighted_nll),
+            "avg_nll": float(mean_nll),
+            "matches_nll": int(n_used),
+        }
+        result_rows.append(row)
+        if show_progress:
+            _print_progress(
+                description="Predictive points-weighted NLL grid search",
                 current=index,
                 total=len(combinations),
                 started_at=progress_start,
