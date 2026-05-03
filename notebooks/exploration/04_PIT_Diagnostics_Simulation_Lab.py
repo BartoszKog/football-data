@@ -192,12 +192,20 @@ def _(
     tempered_builder,
 ):
     true_rho = float(rho_slider.value)
+    global_lambda_home = float(np.mean(lambda_home_true))
+    global_lambda_away = float(np.mean(lambda_away_true))
     model_specs = {
         "Oracle": {
             "lambda_home": lambda_home_true,
             "lambda_away": lambda_away_true,
             "builder": poisson_builder(true_rho),
             "lesson": "Prawidłowa średnia i struktura zależności.",
+        },
+        "Global mean lambdas": {
+            "lambda_home": np.full_like(lambda_home_true, global_lambda_home),
+            "lambda_away": np.full_like(lambda_away_true, global_lambda_away),
+            "builder": poisson_builder(true_rho),
+            "lesson": "Jedna para lambd dla wszystkich meczów, bez heterogeniczności spotkań.",
         },
         "Home lambda too high": {
             "lambda_home": lambda_home_true * 1.25,
@@ -253,6 +261,11 @@ def _(model_specs):
                     "Oracle",
                     model_specs["Oracle"],
                     "Wszystkie warianty powinny być blisko uniform.",
+                ),
+                (
+                    "Global mean lambdas",
+                    model_specs["Global mean lambdas"],
+                    "home_goals i away_goals: globalnie może wyglądać poprawnie, lokalnie nie.",
                 ),
                 (
                     "Home lambda too high",
@@ -617,6 +630,45 @@ def _(pit_results):
         figsize=(6.5, 4.6),
     )
     away_low_worm
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md("""
+    ### Jedna para lambd dla wszystkich meczów: `Global mean lambdas`
+
+    Tutaj model dostaje stałe wartości `lambda_home` i `lambda_away` równe
+    średniej z całej próbki. Taki model ignoruje różnice pomiędzy meczami.
+    Zbiorczo może wyglądać "znośnie", ale dla marginesów (`home_goals`,
+    `away_goals`) zwykle ujawnia brak kalibracji zależnej od kontekstu meczu.
+    """)
+    return
+
+
+@app.cell
+def _(pit_results):
+    global_lambdas_histogram = plot_pit_histogram_replicates(
+        {"Global mean lambdas": pit_results["Global mean lambdas"]},
+        variants=("home_goals", "away_goals"),
+        title="Global mean lambdas - marginal goals histogram",
+        figsize=(12, 4.8),
+    )
+    global_lambdas_histogram
+    return
+
+
+@app.cell
+def _(pit_results):
+    global_lambdas_worm = plot_pit_worm_replicates(
+        {"Global mean lambdas": pit_results["Global mean lambdas"]},
+        variants=("home_goals", "away_goals"),
+        title="Global mean lambdas - marginal goals worm plot",
+        n_simulations=500,
+        replicate_alpha=0.04,
+        figsize=(12, 4.8),
+    )
+    global_lambdas_worm
     return
 
 
