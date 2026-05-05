@@ -71,3 +71,17 @@ plotting helpers.
 ::: src.models.evaluation.plot_pit_histogram_replicates
 
 ::: src.models.evaluation.plot_pit_worm_replicates
+
+## Pearson chi-square diagnostics
+
+Pearson chi-square helpers for scoreline goodness-of-fit on aggregated 4x4 bins
+(`0, 1, 2, 3+` by home/away goals) with sparse-bin merge to `Other`.
+
+`ddof` adjusts effective degrees of freedom (`dof = k_final - 1 - ddof`) and
+should reflect parameter fitting performed on the same sample.
+
+See also: [Przewodnik Pearson χ²](../guides/08-pearson-chi2-diagnostics.md).
+
+::: src.models.evaluation.PearsonChi2ScorelineResult
+
+::: src.models.evaluation.pearson_chi2_scoreline_gof

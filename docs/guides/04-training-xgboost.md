@@ -9,7 +9,7 @@ keywords: XGBoostPoissonModel, xgboost, trainable, walk-forward, football-data
 
 # +lucide:cpu+ Trening XGBoost Poisson
 
-`XGBoostPoissonModel` implementuje [`TrainablePredictiveModel`](../api/models.md):
+[`XGBoostPoissonModel`](../api/models.md#modele-ml) implementuje [`TrainablePredictiveModel`](../api/models.md):
 najpierw `fit`, potem `predict`. Współdzieli z Poisson DC m.in. parametr `rho`
 przy składaniu scoreline.
 

@@ -32,6 +32,8 @@ Public API:
 - build_pit_diagnostics
 - plot_pit_histogram_replicates
 - plot_pit_worm_replicates
+- PearsonChi2ScorelineResult
+- pearson_chi2_scoreline_gof
 """
 
 from .evaluation import (
@@ -39,6 +41,7 @@ from .evaluation import (
     PITDiagnosticsResult,
     PITDistribution,
     PITVariant,
+    PearsonChi2ScorelineResult,
     ScoreRule,
     available_pit_variants,
     build_pit_components,
@@ -55,6 +58,7 @@ from .evaluation import (
     resolve_pit_variants,
     score_single_prediction,
     summarize_pit_uniformity,
+    pearson_chi2_scoreline_gof,
     summarize_predictions_1x2,
 )
 from .components import (
@@ -117,4 +121,6 @@ __all__ = [
     "summarize_pit_uniformity",
     "plot_pit_histogram_replicates",
     "plot_pit_worm_replicates",
+    "PearsonChi2ScorelineResult",
+    "pearson_chi2_scoreline_gof",
 ]

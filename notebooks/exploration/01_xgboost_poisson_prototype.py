@@ -1,11 +1,9 @@
 import marimo
 
-__generated_with = "0.22.0"
+__generated_with = "0.23.2"
 app = marimo.App(width="medium")
 
-
-@app.cell
-def _():
+with app.setup:
     import marimo as mo
     import pandas as pd
     import numpy as np
@@ -37,24 +35,9 @@ def _():
         plot_predictions_summary,
     )
 
-    return (
-        ExpectedPointsOptimizer,
-        ExpectedPointsRule,
-        PoissonMatrixBuilder,
-        add_baseline_poisson_lambdas,
-        add_power_implied_probabilities_standard_markets,
-        evaluate_score_predictions,
-        load_and_add_odds_columns_compact,
-        mo,
-        pd,
-        plot_predictions_summary,
-        score_single_prediction,
-        xgb,
-    )
-
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     # Prototyp modelu XGBoost Poisson
 
@@ -72,7 +55,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     # Wczytanie danych
     """)
@@ -80,7 +63,7 @@ def _(mo):
 
 
 @app.cell
-def _(load_and_add_odds_columns_compact):
+def _():
     df_raw = load_and_add_odds_columns_compact(odds_metrics=["max", "trimmed_avg"])
 
     print(f"Wczytano {len(df_raw)} meczów.")
@@ -88,7 +71,7 @@ def _(load_and_add_odds_columns_compact):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     # Inżynieria cech
     """)
@@ -96,7 +79,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Domniemane prawdopodobieństwa
     """)
@@ -104,7 +87,7 @@ def _(mo):
 
 
 @app.cell
-def _(add_power_implied_probabilities_standard_markets, df_raw):
+def _(df_raw):
     df = (df_raw
         .pipe(
             add_power_implied_probabilities_standard_markets,
@@ -123,7 +106,7 @@ def _(add_power_implied_probabilities_standard_markets, df_raw):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Cechy z kursów, lambdy i marże
     """)
@@ -131,7 +114,7 @@ def _(mo):
 
 
 @app.cell
-def _(add_baseline_poisson_lambdas, df):
+def _(df):
     df_lam = add_baseline_poisson_lambdas(
         df,
         prob_home_col="prob_trimmed_avg_1",
@@ -150,7 +133,7 @@ def _(add_baseline_poisson_lambdas, df):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Cechy formy
 
@@ -161,7 +144,7 @@ def _(mo):
 
 
 @app.cell
-def _(df_lam, pd):
+def _(df_lam):
     # --- CECHY OGÓLNEJ FORMY (Ostatnie 3 mecze bez podziału na Dom/Wyjazd) ---
 
     # 1. Tworzymy tymczasową tabelę ze wszystkimi występami (format długi)
@@ -211,7 +194,7 @@ def _(df_lam, pd):
 
 
 @app.cell
-def _(df_form, pd):
+def _(df_form):
     # --- SANITY CHECK: czy cechy formy są policzone sensownie? ---
     form_cols = [
         "home_overall_scored_roll3",
@@ -327,7 +310,7 @@ def _(df_form):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     # Przygotowanie danych do treningu
     """)
@@ -335,7 +318,7 @@ def _(mo):
 
 
 @app.cell
-def _(X, df_clean, pd, y_away, y_home):
+def _(X, df_clean, y_away, y_home):
     # --- ZAMKNIĘCIE ZBIORU TESTOWEGO (HOLDOUT) ---
     # Sezon 'current' jest całkowicie wyłączony z pętli walidacyjnej (brak wycieku danych).
 
@@ -361,7 +344,7 @@ def _(X, df_clean, pd, y_away, y_home):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     # Trening modeli XGBoost
 
@@ -373,95 +356,84 @@ def _(mo):
     return
 
 
-@app.cell(hide_code=True)
-def _(
-    ExpectedPointsOptimizer,
-    ExpectedPointsRule,
-    PoissonMatrixBuilder,
-    evaluate_score_predictions,
-    pd,
-    score_single_prediction,
-    xgb,
+@app.function(hide_code=True)
+def run_single_fold(
+    X_train,
+    y_home_train,
+    y_away_train,
+    X_val_es,
+    y_home_val_es,
+    y_away_val_es,
+    X_eval,
+    df_hist,
+    xgb_params,
+    builder_params,
+    optimizer_params,
 ):
-    def run_single_fold(
-        X_train,
-        y_home_train,
-        y_away_train,
-        X_val_es,
-        y_home_val_es,
-        y_away_val_es,
-        X_eval,
-        df_hist,
-        xgb_params,
-        builder_params,
-        optimizer_params,
-    ):
-        """Jeden fold Walk-Forward: trening, (train+val_es) i ewaluacja.
+    """Jeden fold Walk-Forward: trening, (train+val_es) i ewaluacja.
 
-        Zwraca (avg_points, df_eval_fold, model_home, model_away).
-        """
-        builder = PoissonMatrixBuilder(**builder_params)
-        optimizer = ExpectedPointsOptimizer(
-            rules=ExpectedPointsRule(), **optimizer_params
-        )
-        model_home = xgb.XGBRegressor(**xgb_params)
-        model_away = xgb.XGBRegressor(**xgb_params)
+    Zwraca (avg_points, df_eval_fold, model_home, model_away).
+    """
+    builder = PoissonMatrixBuilder(**builder_params)
+    optimizer = ExpectedPointsOptimizer(
+        rules=ExpectedPointsRule(), **optimizer_params
+    )
+    model_home = xgb.XGBRegressor(**xgb_params)
+    model_away = xgb.XGBRegressor(**xgb_params)
 
-        # Early stopping opiera się na zbiorze walidacyjnym (val_es),
-        # a finalne metryki na osobnym zbiorze eval.
-        model_home.fit(
-            X_train, y_home_train, eval_set=[(X_val_es, y_home_val_es)], verbose=False
-        )
-        model_away.fit(
-            X_train, y_away_train, eval_set=[(X_val_es, y_away_val_es)], verbose=False
-        )
+    # Early stopping opiera się na zbiorze walidacyjnym (val_es),
+    # a finalne metryki na osobnym zbiorze eval.
+    model_home.fit(
+        X_train, y_home_train, eval_set=[(X_val_es, y_home_val_es)], verbose=False
+    )
+    model_away.fit(
+        X_train, y_away_train, eval_set=[(X_val_es, y_away_val_es)], verbose=False
+    )
 
-        lambdas_home = model_home.predict(X_eval)
-        lambdas_away = model_away.predict(X_eval)
+    lambdas_home = model_home.predict(X_eval)
+    lambdas_away = model_away.predict(X_eval)
 
-        predictions = []
-        for i in range(len(X_eval)):
-            l_h, l_a = float(lambdas_home[i]), float(lambdas_away[i])
-            matrix = builder.build_matrix(l_h, l_a)
-            pred_h, pred_a, _xpts = optimizer.optimize(matrix)
-            predictions.append({
-                "pred_home_goals": pred_h,
-                "pred_away_goals": pred_a,
-                "pred_xpts": _xpts,
-                "exp_goals_home": l_h,
-                "exp_goals_away": l_a,
-            })
+    predictions = []
+    for i in range(len(X_eval)):
+        l_h, l_a = float(lambdas_home[i]), float(lambdas_away[i])
+        matrix = builder.build_matrix(l_h, l_a)
+        pred_h, pred_a, _xpts = optimizer.optimize(matrix)
+        predictions.append({
+            "pred_home_goals": pred_h,
+            "pred_away_goals": pred_a,
+            "pred_xpts": _xpts,
+            "exp_goals_home": l_h,
+            "exp_goals_away": l_a,
+        })
 
-        pred_df = pd.DataFrame(predictions, index=X_eval.index)
-        df_eval_fold = df_hist.loc[pred_df.index].copy()
-        df_eval_fold["pred_home_goals"] = pred_df["pred_home_goals"]
-        df_eval_fold["pred_away_goals"] = pred_df["pred_away_goals"]
-        df_eval_fold["pred_score"] = (
-            df_eval_fold["pred_home_goals"].astype(str)
-            + ":"
-            + df_eval_fold["pred_away_goals"].astype(str)
-        )
-        df_eval_fold["pred_xpts"] = pred_df["pred_xpts"]
-        df_eval_fold["exp_goals_home"] = pred_df["exp_goals_home"]
-        df_eval_fold["exp_goals_away"] = pred_df["exp_goals_away"]
-        df_eval_fold["points_score"] = df_eval_fold.apply(
-            lambda row: score_single_prediction(
-                pred_home=row["pred_home_goals"],
-                pred_away=row["pred_away_goals"],
-                actual_home=row["home_score"],
-                actual_away=row["away_score"],
-            ),
-            axis=1,
-        )
+    pred_df = pd.DataFrame(predictions, index=X_eval.index)
+    df_eval_fold = df_hist.loc[pred_df.index].copy()
+    df_eval_fold["pred_home_goals"] = pred_df["pred_home_goals"]
+    df_eval_fold["pred_away_goals"] = pred_df["pred_away_goals"]
+    df_eval_fold["pred_score"] = (
+        df_eval_fold["pred_home_goals"].astype(str)
+        + ":"
+        + df_eval_fold["pred_away_goals"].astype(str)
+    )
+    df_eval_fold["pred_xpts"] = pred_df["pred_xpts"]
+    df_eval_fold["exp_goals_home"] = pred_df["exp_goals_home"]
+    df_eval_fold["exp_goals_away"] = pred_df["exp_goals_away"]
+    df_eval_fold["points_score"] = df_eval_fold.apply(
+        lambda row: score_single_prediction(
+            pred_home=row["pred_home_goals"],
+            pred_away=row["pred_away_goals"],
+            actual_home=row["home_score"],
+            actual_away=row["away_score"],
+        ),
+        axis=1,
+    )
 
-        metrics = evaluate_score_predictions(df_eval_fold)
-        return metrics["avg_points"], df_eval_fold, model_home, model_away
-
-    return (run_single_fold,)
+    metrics = evaluate_score_predictions(df_eval_fold)
+    return metrics["avg_points"], df_eval_fold, model_home, model_away
 
 
 @app.cell
-def _(X, df_clean, historical_seasons, run_single_fold, y_away, y_home):
+def _(X, df_clean, historical_seasons, y_away, y_home):
     import itertools
 
     # --- BAZOWA KONFIGURACJA (stałe parametry; grid search modyfikuje tylko wybrane pola) ---
@@ -638,7 +610,7 @@ def _(X, df_clean, historical_seasons, run_single_fold, y_away, y_home):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     # Ewaluacja
 
@@ -662,13 +634,13 @@ def _(df_eval):
 
 
 @app.cell
-def _(df_eval, evaluate_score_predictions):
+def _(df_eval):
     evaluate_score_predictions(df=df_eval)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Wykresy diagnostyczne
     """)
@@ -676,13 +648,13 @@ def _(mo):
 
 
 @app.cell
-def _(df_eval, plot_predictions_summary):
+def _(df_eval):
     plot_predictions_summary(df_eval, model_name="Ostatni fold - rozkład punktów i 1X2")
     return
 
 
 @app.cell
-def _(df_eval_folds, plot_predictions_summary):
+def _(df_eval_folds):
     plot_predictions_summary(
         df_eval_folds[1], model_name="Fold 2 - rozkład punktów i 1X2"
     )
@@ -690,7 +662,7 @@ def _(df_eval_folds, plot_predictions_summary):
 
 
 @app.cell
-def _(df_eval_folds, plot_predictions_summary):
+def _(df_eval_folds):
     plot_predictions_summary(
         df_eval_folds[0], model_name="Fold 1 - rozkład punktów i 1X2"
     )
@@ -698,7 +670,7 @@ def _(df_eval_folds, plot_predictions_summary):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Ważność cech
     """)
@@ -706,7 +678,7 @@ def _(mo):
 
 
 @app.cell
-def _(model_home, xgb):
+def _(model_home):
     xgb.plot_importance(
         model_home, 
         importance_type='gain'
@@ -715,7 +687,7 @@ def _(model_home, xgb):
 
 
 @app.cell
-def _(model_away, xgb):
+def _(model_away):
     xgb.plot_importance(
         model_away, 
         importance_type='gain'
@@ -724,7 +696,7 @@ def _(model_away, xgb):
 
 
 @app.cell
-def _(model_away, model_home, pd):
+def _(model_away, model_home):
     # Wyciągamy słowniki z wartościami 'gain' bezpośrednio z silnika (Booster)
     gain_home = model_home.get_booster().get_score(importance_type='gain')
     gain_away = model_away.get_booster().get_score(importance_type='gain')
@@ -751,7 +723,7 @@ def _(model_away, model_home, pd):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     # Test ostateczny
 
@@ -764,17 +736,12 @@ def _(mo):
 
 @app.cell
 def _(
-    ExpectedPointsOptimizer,
-    ExpectedPointsRule,
-    PoissonMatrixBuilder,
     X_holdout,
     best_builder_params,
     best_xgb_params,
     df_clean,
-    evaluate_score_predictions,
     features,
     historical_seasons,
-    xgb,
     y_away_holdout,
     y_home_holdout,
 ):
@@ -841,7 +808,7 @@ def _(df_holdout_eval):
 
 
 @app.cell
-def _(df_holdout_eval, plot_predictions_summary):
+def _(df_holdout_eval):
     plot_predictions_summary(df_holdout_eval, model_name="Zbiór testowy - rozkład punktów i 1X2")
     return
 

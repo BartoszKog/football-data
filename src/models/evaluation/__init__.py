@@ -22,6 +22,8 @@ Public API:
 - summarize_pit_uniformity
 - plot_pit_histogram_replicates
 - plot_pit_worm_replicates
+- PearsonChi2ScorelineResult
+- pearson_chi2_scoreline_gof
 """
 
 from .scoring import (
@@ -51,6 +53,10 @@ from .pit import (
     resolve_pit_variants,
     summarize_pit_uniformity,
 )
+from .pearson_chi2 import (
+    PearsonChi2ScorelineResult,
+    pearson_chi2_scoreline_gof,
+)
 
 __all__ = [
     "ScoreRule",
@@ -74,4 +80,6 @@ __all__ = [
     "summarize_pit_uniformity",
     "plot_pit_histogram_replicates",
     "plot_pit_worm_replicates",
+    "PearsonChi2ScorelineResult",
+    "pearson_chi2_scoreline_gof",
 ]

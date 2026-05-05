@@ -50,6 +50,9 @@ warianty poszczególnych funkcji i dlaczego pewne decyzje (np. konkretna wartoś
 - [Interpretacja PIT i worm plot](guides/07-pit-diagnostics-interpretation.md) —
   jak czytać kształty diagnostyczne dla dobrej kalibracji, biasu lambd i
   over/underconfidence.
+- [Diagnostyka testem Pearson χ²](guides/08-pearson-chi2-diagnostics.md) —
+  kalibracja agregatów scoreline `4x4 + Other`, interpretacja `ddof` oraz
+  praktyczny workflow z NLL i PIT.
 
 ### +lucide:lightbulb+ Concepts (dlaczego tak)
 
