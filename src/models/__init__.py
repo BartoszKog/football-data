@@ -14,6 +14,7 @@ Public API:
 - PointsSummary1x2
 - summarize_predictions_1x2
 - plot_predictions_summary
+- plot_predictions_scoreline_summary
 - GridSearchResult
 - build_param_grid
 - run_predictive_grid_search
@@ -52,6 +53,7 @@ from .evaluation import (
     evaluate_score_predictions,
     get_pit_variant,
     plot_pit_histogram_replicates,
+    plot_predictions_scoreline_summary,
     plot_predictions_summary,
     plot_pit_worm_replicates,
     randomized_pit_replicates_from_components,
@@ -96,6 +98,7 @@ __all__ = [
     "PointsSummary1x2",
     "summarize_predictions_1x2",
     "plot_predictions_summary",
+    "plot_predictions_scoreline_summary",
     "GridSearchResult",
     "build_param_grid",
     "run_predictive_grid_search",

@@ -10,6 +10,7 @@ Public API:
 - PointsSummary1x2
 - summarize_predictions_1x2
 - plot_predictions_summary
+- plot_predictions_scoreline_summary
 - PITDistribution
 - PITVariant
 - PITDiagnosticsResult
@@ -36,6 +37,7 @@ from .scoring import (
 )
 from .visualization import (
     PointsSummary1x2,
+    plot_predictions_scoreline_summary,
     plot_predictions_summary,
     summarize_predictions_1x2,
 )
@@ -68,6 +70,7 @@ __all__ = [
     "PointsSummary1x2",
     "summarize_predictions_1x2",
     "plot_predictions_summary",
+    "plot_predictions_scoreline_summary",
     "PITDistribution",
     "PITVariant",
     "PITDiagnosticsResult",

@@ -3,7 +3,7 @@ title: src.models.evaluation
 summary: Punktacja Supertyper, Poisson deviance i wizualizacje predykcji
 sidebar_title: src.models.evaluation
 order: 5
-description: API modulu src.models.evaluation - evaluate_score_predictions, evaluate_poisson_deviance, plot_predictions_summary.
+description: API modulu src.models.evaluation - evaluate_score_predictions, evaluate_poisson_deviance, plot_predictions_summary, plot_predictions_scoreline_summary.
 keywords: src.models.evaluation, supertyper, scoring, poisson deviance, paired t-test
 ---
 
@@ -41,6 +41,12 @@ sparowany t-test deviance oraz wizualizacje ewaluacji predykcji.
 example result of `plot_predictions_summary`:
 
 ![plot_predictions_summary example](../assets/predictions_summary_poisson_dc.png)
+
+::: src.models.evaluation.plot_predictions_scoreline_summary
+
+example result of `plot_predictions_scoreline_summary`:
+
+![plot_predictions_scoreline_summary example](../assets/predictions_scoreline_summary_poisson_dc.png)
 
 ## PIT diagnostics
 

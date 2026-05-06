@@ -1,10 +1,10 @@
 ---
 title: Ewaluacja predykcji
-summary: Punkty Supertyper, podsumowania 1X2, wykresy plot_predictions_summary, deviance
+summary: Punkty Supertyper, podsumowania 1X2, plot_predictions_summary, plot_predictions_scoreline_summary, deviance
 sidebar_title: Ewaluacja predykcji
 order: 5
-description: Jak mierzyć jakość predykcji — evaluate_score_predictions, summarize_predictions_1x2, plot_predictions_summary z przykładowymi wykresami.
-keywords: evaluate_score_predictions, avg_points, deviance, plot_predictions_summary, supertyper
+description: Jak mierzyć jakość predykcji — evaluate_score_predictions, summarize_predictions_1x2, plot_predictions_summary, plot_predictions_scoreline_summary z przykładowymi wykresami.
+keywords: evaluate_score_predictions, avg_points, deviance, plot_predictions_summary, plot_predictions_scoreline_summary, supertyper
 ---
 
 # +lucide:gauge+ Ewaluacja predykcji
@@ -20,7 +20,8 @@ Implementacja w repo: `src/models/evaluation/scoring.py` (m.in.
 `evaluate_score_predictions`, `evaluate_poisson_deviance`,
 `compare_deviance_paired_ttest`, `ScoreRule`) oraz
 `src/models/evaluation/visualization.py` (`summarize_predictions_1x2`,
-`PointsSummary1x2`, `plot_predictions_summary`). Pełne sygnatury:
+`PointsSummary1x2`, `plot_predictions_summary`,
+`plot_predictions_scoreline_summary`). Pełne sygnatury:
 [API evaluation](../api/evaluation.md).
 
 ## Co pokazuje `plot_predictions_summary`
@@ -75,6 +76,35 @@ macierz pomyłek 1X2 (łącznie 163 mecze; `avg_points` ≈ 148/163 ≈ 0,91).
 Rysunek 2. Ten sam zbiór testowy: model XGB z
 `01_xgboost_poisson_prototype.py` — wyższa suma i średnia punktów (`avg_points`
 ≈ 154/163 ≈ 0,95) przy podobnej strukturze błędów na remisach.
+///
+
+## `plot_predictions_scoreline_summary` — mapa par bramek i top wyników
+
+[`plot_predictions_scoreline_summary`][src.models.evaluation.plot_predictions_scoreline_summary]
+to osobna figura **2×2** (matplotlib): **górny rząd** — dwie heatmapy częstości par
+(bramki gospodarza × gość) dla predykcji i dla faktów; wartości od **0** do
+**`max_goals_clip`** (domyślnie 4), przy czym na osi ostatni kubełek jest oznaczony
+**`+4`** (zgrubszenie „4 lub więcej bramek”). **Dolny rząd** — poziome słupki z
+**najczęstszymi pełnymi scoreline’ami** `h:a` (bez ścięcia — osobno dla typów i
+dla rzeczywistości). Do wizualizacji trafiają tylko wiersze, w których po konwersji
+do liczb wszystkie cztery pola (`pred_*` i fakty) są **skończone** (`dropna`).
+
+```python
+from src.models import plot_predictions_scoreline_summary
+
+fig = plot_predictions_scoreline_summary(
+    pred_df,
+    model_name="Poisson Dixon–Coles — scoreline",
+)
+fig
+```
+
+![Heatmapy par bramek i top 6 scoreline’ów — Dixon–Coles](../assets/predictions_scoreline_summary_poisson_dc.png)
+
+/// figure-caption
+Rysunek 3. Przykład z laboratorium Dixon–Coles / kalibracji Poissona: jak rozłożone są
+typowane vs rzeczywiste pary bramek (heatmapy wspólna skala kolorów) oraz jakie
+`h:a` pojawiają się najczęściej w próbce (dolne panele).
 ///
 
 ## Podstawowe metryki (programowo) — `evaluate_score_predictions`
