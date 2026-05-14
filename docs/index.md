@@ -23,6 +23,8 @@ warianty poszczególnych funkcji i dlaczego pewne decyzje (np. konkretna wartoś
 - Jeśli wiesz co chcesz zrobić, ale nie pamiętasz jak — zajrzyj do [Guides](guides/01-loading-data.md).
 - Jeśli chcesz przypomnieć sobie "czemu tak, a nie inaczej" — zajrzyj do [Concepts](concepts/dixon-coles-correction.md).
 - Jeśli szukasz sygnatury konkretnej funkcji lub klasy — zajrzyj do [API](api/data.md).
+- Jeśli chcesz przejrzeć wygenerowany raport HTML z notatnika baseline —
+  zajrzyj do [Raportów](reports/poisson-dixon-coles-baseline.md).
 
 ## +lucide:map+ Mapa dokumentacji
 
@@ -32,6 +34,12 @@ warianty poszczególnych funkcji i dlaczego pewne decyzje (np. konkretna wartoś
   danych, uruchomienie pierwszego notatnika i dokumentacji offline.
 - [Struktura projektu](project-structure.md) — mapa katalogów (`data/`, `src/`,
   `notebooks/`, skrypty) i skrót warstw kodu.
+
+### +lucide:file-chart-column+ Raporty
+
+- [Baseline Poisson Dixon–Coles](reports/poisson-dixon-coles-baseline.md) —
+  link do pełnego raportu HTML (`poisson_dixon_coles_baseline.html`) oraz
+  skrót kontekstu w guides/concepts.
 
 ### +lucide:book-open+ Guides (jak coś zrobić)
 
