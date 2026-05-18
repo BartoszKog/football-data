@@ -31,8 +31,10 @@ class PoissonDixonColesModel(PredictiveModel):
     It then:
     1. maps over-2.5 probability to total expected goals,
     2. splits expected goals between teams with home/away win probabilities,
-    3. builds a Poisson matrix corrected by Dixon-Coles `rho`,
-    4. picks scoreline maximizing expected points under Supertyper-like scoring.
+    3. applies per-team goal-expectation multipliers (``bias_correction`` and/or
+       optional ``bias_home`` / ``bias_away``),
+    4. builds a Poisson matrix corrected by Dixon-Coles ``rho``,
+    5. picks scoreline maximizing expected points under Supertyper-like scoring.
     """
 
     def __init__(
@@ -43,6 +45,8 @@ class PoissonDixonColesModel(PredictiveModel):
         prob_over25_col: str = "prob_over_25",
         rho: float = 0.0,
         bias_correction: float = 1.0,
+        bias_home: float | None = None,
+        bias_away: float | None = None,
         max_goals_matrix: int = 6,
         max_goals_prediction: int = 4,
         points_rule: ExpectedPointsRule | None = None,
@@ -64,7 +68,17 @@ class PoissonDixonColesModel(PredictiveModel):
         rho:
             Dixon-Coles low-score correction parameter.
         bias_correction:
-            Multiplicative adjustment applied to total expected goals.
+            Default multiplicative adjustment applied to each team's expected
+            goals after splitting total expected goals. Used for home when
+            ``bias_home`` is omitted and for away when ``bias_away`` is omitted.
+        bias_home:
+            If set, multiplies the home team's expected goals instead of
+            ``bias_correction`` for that side. If ``None``, home uses
+            ``bias_correction``.
+        bias_away:
+            If set, multiplies the away team's expected goals instead of
+            ``bias_correction`` for that side. If ``None``, away uses
+            ``bias_correction``.
         max_goals_matrix:
             Maximum goals per team in the probability matrix (inclusive).
         max_goals_prediction:
@@ -97,6 +111,8 @@ class PoissonDixonColesModel(PredictiveModel):
         self.prob_over25_col = prob_over25_col
         self.rho = float(rho)
         self.bias_correction = float(bias_correction)
+        self.bias_home = None if bias_home is None else float(bias_home)
+        self.bias_away = None if bias_away is None else float(bias_away)
         self.max_goals_matrix = int(max_goals_matrix)
         self.max_goals_prediction = int(max_goals_prediction)
         self.errors = errors
@@ -178,6 +194,16 @@ class PoissonDixonColesModel(PredictiveModel):
             raise ValueError("bias_correction must be finite.")
         if self.bias_correction <= 0:
             raise ValueError("bias_correction must be greater than 0.")
+        for name, val in (
+            ("bias_home", self.bias_home),
+            ("bias_away", self.bias_away),
+        ):
+            if val is None:
+                continue
+            if not np.isfinite(val):
+                raise ValueError(f"{name} must be finite.")
+            if val <= 0:
+                raise ValueError(f"{name} must be greater than 0.")
 
     def _validate_required_columns(self, df: pd.DataFrame) -> None:
         required = [self.prob_home_col, self.prob_away_col, self.prob_over25_col]
@@ -195,13 +221,21 @@ class PoissonDixonColesModel(PredictiveModel):
         self._validate_input_probabilities(prob_home, prob_away, prob_over25)
 
         total_lambda = self._solve_total_lambda_from_over25(prob_over25)
-        total_lambda *= self.bias_correction
 
         lambda_home, lambda_away = self._split_total_lambda(
             total_lambda=total_lambda,
             prob_home=prob_home,
             prob_away=prob_away,
         )
+
+        eff_home = (
+            self.bias_home if self.bias_home is not None else self.bias_correction
+        )
+        eff_away = (
+            self.bias_away if self.bias_away is not None else self.bias_correction
+        )
+        lambda_home *= eff_home
+        lambda_away *= eff_away
 
         matrix = self.matrix_builder.build_matrix(
             lambda_home=lambda_home,
